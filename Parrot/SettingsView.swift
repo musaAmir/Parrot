@@ -221,14 +221,14 @@ struct ShortcutsSettingsTab: View {
 
                 if audioManager.holdModeEnabled {
                     ModernRow(showDivider: false) {
-                        HStack {
+                        HStack(spacing: 16) {
                             Text("Shortcut")
-                            Spacer()
                             ShortcutRecorder(
                                 keyCode: $audioManager.shortcutKeyCode,
                                 modifierFlags: $audioManager.shortcutModifierFlags
                             )
                             .frame(width: 180, height: 32)
+                            Spacer()
                         }
                     }
                 }
@@ -253,14 +253,14 @@ struct ShortcutsSettingsTab: View {
 
                 if audioManager.toggleModeEnabled {
                     ModernRow(showDivider: false) {
-                        HStack {
+                        HStack(spacing: 16) {
                             Text("Shortcut")
-                            Spacer()
                             ShortcutRecorder(
                                 keyCode: $audioManager.toggleShortcutKeyCode,
                                 modifierFlags: $audioManager.toggleShortcutModifierFlags
                             )
                             .frame(width: 180, height: 32)
+                            Spacer()
                         }
                     }
                 }
