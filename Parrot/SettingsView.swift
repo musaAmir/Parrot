@@ -61,7 +61,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 600, height: 400)
+        .frame(width: 650, height: 420)
         .onAppear {
             inputDevices = audioManager.getAvailableInputDevices()
             outputDevices = audioManager.getAvailableOutputDevices()
@@ -137,12 +137,14 @@ struct ShortcutsSettingsTab: View {
                 Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
 
                 if audioManager.holdModeEnabled {
-                    LabeledContent("Shortcut") {
+                    HStack {
+                        Text("Shortcut")
+                        Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.shortcutKeyCode,
                             modifierFlags: $audioManager.shortcutModifierFlags
                         )
-                        .frame(width: 180, height: 36)
+                        .frame(width: 160, height: 32)
                     }
                 }
             } header: {
@@ -156,12 +158,14 @@ struct ShortcutsSettingsTab: View {
                 Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
 
                 if audioManager.toggleModeEnabled {
-                    LabeledContent("Shortcut") {
+                    HStack {
+                        Text("Shortcut")
+                        Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.toggleShortcutKeyCode,
                             modifierFlags: $audioManager.toggleShortcutModifierFlags
                         )
-                        .frame(width: 180, height: 36)
+                        .frame(width: 160, height: 32)
                     }
                 }
             } header: {

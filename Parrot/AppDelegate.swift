@@ -249,10 +249,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             settingsWindow = NSWindow(contentViewController: hostingController)
             settingsWindow?.title = "Parrot Settings"
-            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 600, height: 400))
+            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+            settingsWindow?.titlebarAppearsTransparent = true
+            settingsWindow?.setContentSize(NSSize(width: 650, height: 420))
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
+            settingsWindow?.backgroundColor = .windowBackgroundColor
+
+            // Apply rounded corners
+            if let contentView = settingsWindow?.contentView {
+                contentView.wantsLayer = true
+                contentView.layer?.cornerRadius = 12
+                contentView.layer?.masksToBounds = true
+            }
         }
 
         permissionManager.refreshPermissions()
