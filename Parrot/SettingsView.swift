@@ -207,18 +207,22 @@ struct ShortcutsSettingsTab: View {
                 footer: "Press and hold the shortcut while speaking, release to play back"
             ) {
                 ModernRow(showDivider: audioManager.holdModeEnabled) {
-                    Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
+                    Toggle(isOn: $audioManager.holdModeEnabled) {
+                        Text("Enable Hold to Record")
+                    }
+                    .toggleStyle(.checkbox)
                 }
 
                 if audioManager.holdModeEnabled {
                     ModernRow(showDivider: false) {
                         Text("Shortcut")
+                            .frame(width: 80, alignment: .leading)
                         Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.shortcutKeyCode,
                             modifierFlags: $audioManager.shortcutModifierFlags
                         )
-                        .frame(width: 150, height: 32)
+                        .frame(width: 140, height: 32)
                     }
                 }
             }
@@ -228,18 +232,22 @@ struct ShortcutsSettingsTab: View {
                 footer: "Tap once to start recording, tap again to stop. Hold for 1.5s for hold mode."
             ) {
                 ModernRow(showDivider: audioManager.toggleModeEnabled) {
-                    Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
+                    Toggle(isOn: $audioManager.toggleModeEnabled) {
+                        Text("Enable Toggle to Record")
+                    }
+                    .toggleStyle(.checkbox)
                 }
 
                 if audioManager.toggleModeEnabled {
                     ModernRow(showDivider: false) {
                         Text("Shortcut")
+                            .frame(width: 80, alignment: .leading)
                         Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.toggleShortcutKeyCode,
                             modifierFlags: $audioManager.toggleShortcutModifierFlags
                         )
-                        .frame(width: 150, height: 32)
+                        .frame(width: 140, height: 32)
                     }
                 }
             }
