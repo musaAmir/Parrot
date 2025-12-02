@@ -42,12 +42,22 @@ struct SettingsView: View {
 
                 // Hold to Record
                 GroupBox("Hold to Record") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
                         if audioManager.holdModeEnabled {
-                            Text("Shortcut: ⌘⇧Z (press and hold while speaking)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Shortcut:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                ShortcutRecorder(
+                                    keyCode: $audioManager.shortcutKeyCode,
+                                    modifierFlags: $audioManager.shortcutModifierFlags
+                                )
+                                .frame(height: 44)
+                                Text("Press and hold while speaking")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     .padding(.vertical, 4)
@@ -55,12 +65,22 @@ struct SettingsView: View {
 
                 // Toggle to Record
                 GroupBox("Toggle to Record") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
                         if audioManager.toggleModeEnabled {
-                            Text("Shortcut: ⌘⇧T (tap to start/stop)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Shortcut:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                ShortcutRecorder(
+                                    keyCode: $audioManager.toggleShortcutKeyCode,
+                                    modifierFlags: $audioManager.toggleShortcutModifierFlags
+                                )
+                                .frame(height: 44)
+                                Text("Tap to start/stop, or hold 1.5s for hold mode")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     .padding(.vertical, 4)
@@ -172,7 +192,7 @@ struct SettingsView: View {
             }
             .padding(24)
         }
-        .frame(width: 450, height: 700)
+        .frame(width: 450, height: 800)
         .onAppear {
             inputDevices = audioManager.getAvailableInputDevices()
             outputDevices = audioManager.getAvailableOutputDevices()

@@ -13,6 +13,9 @@
 		AA0001102EC5AF2C00000020 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001112EC5AF2C00000021 /* AudioManager.swift */; };
 		AA0001122EC5AF2C00000022 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001132EC5AF2C00000023 /* PermissionManager.swift */; };
 		AA0001142EC5AF2C00000024 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001152EC5AF2C00000025 /* SettingsView.swift */; };
+		AA0001162EC5AF2C00000030 /* RecordingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001172EC5AF2C00000031 /* RecordingIndicatorWindow.swift */; };
+		AA0001182EC5AF2C00000032 /* PlaybackIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001192EC5AF2C00000033 /* PlaybackIndicatorWindow.swift */; };
+		AA00011A2EC5AF2C00000034 /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00011B2EC5AF2C00000035 /* ShortcutRecorder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +28,9 @@
 		AA0001112EC5AF2C00000021 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
 		AA0001132EC5AF2C00000023 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		AA0001152EC5AF2C00000025 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AA0001172EC5AF2C00000031 /* RecordingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicatorWindow.swift; sourceTree = "<group>"; };
+		AA0001192EC5AF2C00000033 /* PlaybackIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackIndicatorWindow.swift; sourceTree = "<group>"; };
+		AA00011B2EC5AF2C00000035 /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +68,9 @@
 				AA0001112EC5AF2C00000021 /* AudioManager.swift */,
 				AA0001132EC5AF2C00000023 /* PermissionManager.swift */,
 				AA0001152EC5AF2C00000025 /* SettingsView.swift */,
+				AA0001172EC5AF2C00000031 /* RecordingIndicatorWindow.swift */,
+				AA0001192EC5AF2C00000033 /* PlaybackIndicatorWindow.swift */,
+				AA00011B2EC5AF2C00000035 /* ShortcutRecorder.swift */,
 				AA0001042EC5AF2C00000003 /* Assets.xcassets */,
 				AA0001062EC5AF2C00000004 /* Info.plist */,
 				AA0001072EC5AF2C00000005 /* Parrot.entitlements */,
@@ -143,6 +152,9 @@
 				AA0001102EC5AF2C00000020 /* AudioManager.swift in Sources */,
 				AA0001122EC5AF2C00000022 /* PermissionManager.swift in Sources */,
 				AA0001142EC5AF2C00000024 /* SettingsView.swift in Sources */,
+				AA0001162EC5AF2C00000030 /* RecordingIndicatorWindow.swift in Sources */,
+				AA0001182EC5AF2C00000032 /* PlaybackIndicatorWindow.swift in Sources */,
+				AA00011A2EC5AF2C00000034 /* ShortcutRecorder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

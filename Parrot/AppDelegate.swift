@@ -20,6 +20,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var eventTapCreationFailed = false
     var cancellables = Set<AnyCancellable>()
 
+    // Indicator windows
+    var recordingIndicatorWindow: RecordingIndicatorWindow?
+    var playbackIndicatorWindow: PlaybackIndicatorWindow?
+
     // Smart shortcut state tracking
     var toggleShortcutPressTime: Date?
     var toggleShortcutHoldTimer: Timer?
@@ -29,12 +33,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         audioManager = AudioManager()
         permissionManager = PermissionManager()
+        setupIndicatorWindows()
+        setupRecordingObservers()
         setupGlobalKeyboardShortcut()
         requestPermissions()
 
         if eventTapCreationFailed {
             startPermissionMonitoring()
         }
+    }
+
+    func setupIndicatorWindows() {
+        recordingIndicatorWindow = RecordingIndicatorWindow(appDelegate: self)
+        playbackIndicatorWindow = PlaybackIndicatorWindow(audioManager: audioManager)
+    }
+
+    func setupRecordingObservers() {
+        // Observe recording state changes
+        audioManager.$isRecording
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isRecording in
+                if isRecording {
+                    self?.recordingIndicatorWindow?.show()
+                } else {
+                    self?.recordingIndicatorWindow?.hide()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Observe playback state changes
+        audioManager.$isPlaying
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isPlaying in
+                guard let self = self else { return }
+                if isPlaying && self.audioManager.showPlaybackIndicator {
+                    self.playbackIndicatorWindow?.show()
+                } else {
+                    self.playbackIndicatorWindow?.hide()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func setupMenuBar() {
@@ -212,7 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = NSWindow(contentViewController: hostingController)
             settingsWindow?.title = "Parrot Settings"
             settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 450, height: 700))
+            settingsWindow?.setContentSize(NSSize(width: 450, height: 800))
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
         }
