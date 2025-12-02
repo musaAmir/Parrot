@@ -321,7 +321,7 @@ struct AudioSettingsTab: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .frame(width: pickerWidth, alignment: .leading)
+                        .frame(minWidth: pickerWidth, maxWidth: pickerWidth)
                         Spacer()
                     }
                 }
@@ -339,7 +339,7 @@ struct AudioSettingsTab: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .frame(width: pickerWidth, alignment: .leading)
+                        .frame(minWidth: pickerWidth, maxWidth: pickerWidth)
                         Spacer()
                     }
                 }
