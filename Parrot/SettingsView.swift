@@ -305,6 +305,8 @@ struct AudioSettingsTab: View {
     @Binding var inputDevices: [AVCaptureDevice]
     @Binding var outputDevices: [AudioManager.AudioOutputDevice]
 
+    private let pickerWidth: CGFloat = 220
+
     var body: some View {
         VStack(spacing: 20) {
             ModernSection(header: "Input Device") {
@@ -318,7 +320,8 @@ struct AudioSettingsTab: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 200)
+                        .pickerStyle(.menu)
+                        .frame(width: pickerWidth, alignment: .leading)
                         Spacer()
                     }
                 }
@@ -335,7 +338,8 @@ struct AudioSettingsTab: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 200)
+                        .pickerStyle(.menu)
+                        .frame(width: pickerWidth, alignment: .leading)
                         Spacer()
                     }
                 }
