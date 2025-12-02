@@ -142,37 +142,37 @@ struct ModernRow<Content: View>: View {
 struct GeneralSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
 
+    private let labelWidth: CGFloat = 100
+    private let sliderWidth: CGFloat = 150
+    private let valueWidth: CGFloat = 50
+
     var body: some View {
         VStack(spacing: 20) {
             ModernSection(header: "Playback") {
                 ModernRow {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         Text("Playback Delay")
+                            .frame(width: labelWidth, alignment: .leading)
                         Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
-                            .frame(width: 150)
+                            .frame(width: sliderWidth)
                         Text(String(format: "%.1f s", audioManager.playbackDelay))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
-                            .frame(width: 45, alignment: .trailing)
+                            .frame(width: valueWidth, alignment: .trailing)
                         Spacer()
                     }
                 }
 
                 ModernRow(showDivider: false) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         Text("Volume")
-                        Image(systemName: "speaker.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.caption)
+                            .frame(width: labelWidth, alignment: .leading)
                         Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
-                            .frame(width: 120)
-                        Image(systemName: "speaker.wave.3.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.caption)
+                            .frame(width: sliderWidth)
                         Text("\(Int(audioManager.playbackVolume * 100))%")
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
-                            .frame(width: 45, alignment: .trailing)
+                            .frame(width: valueWidth, alignment: .trailing)
                         Spacer()
                     }
                 }
@@ -318,7 +318,7 @@ struct AudioSettingsTab: View {
                                 }
                             ),
                             options: [("default", "System Default")] + inputDevices.map { ($0.uniqueID, $0.localizedName) }
-                        )
+                    
                         Spacer()
                     }
                 }
