@@ -146,48 +146,76 @@ struct GeneralSettingsTab: View {
         VStack(spacing: 20) {
             ModernSection(header: "Playback") {
                 ModernRow {
-                    Text("Playback Delay")
-                    Spacer()
-                    Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
-                        .frame(width: 150)
-                    Text(String(format: "%.1f s", audioManager.playbackDelay))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 45, alignment: .trailing)
+                    HStack(spacing: 16) {
+                        Text("Playback Delay")
+                        Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
+                            .frame(width: 150)
+                        Text(String(format: "%.1f s", audioManager.playbackDelay))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 45, alignment: .trailing)
+                        Spacer()
+                    }
                 }
 
                 ModernRow(showDivider: false) {
-                    Text("Volume")
-                    Spacer()
-                    Image(systemName: "speaker.fill")
-                        .foregroundStyle(.tertiary)
-                        .font(.caption)
-                    Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
-                        .frame(width: 120)
-                    Image(systemName: "speaker.wave.3.fill")
-                        .foregroundStyle(.tertiary)
-                        .font(.caption)
-                    Text("\(Int(audioManager.playbackVolume * 100))%")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
+                    HStack(spacing: 16) {
+                        Text("Volume")
+                        Image(systemName: "speaker.fill")
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                        Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
+                            .frame(width: 120)
+                        Image(systemName: "speaker.wave.3.fill")
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                        Text("\(Int(audioManager.playbackVolume * 100))%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 45, alignment: .trailing)
+                        Spacer()
+                    }
                 }
             }
 
             ModernSection(header: "Appearance") {
                 ModernRow {
-                    Toggle("Show Dock Icon", isOn: $audioManager.showDockIcon)
+                    HStack {
+                        Toggle(isOn: $audioManager.showDockIcon) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
                         .onChange(of: audioManager.showDockIcon) { _, newValue in
                             NSApp.setActivationPolicy(newValue ? .regular : .accessory)
                         }
+                        Text("Show Dock Icon")
+                        Spacer()
+                    }
                 }
 
                 ModernRow {
-                    Toggle("Show Playback Indicator", isOn: $audioManager.showPlaybackIndicator)
+                    HStack {
+                        Toggle(isOn: $audioManager.showPlaybackIndicator) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        Text("Show Playback Indicator")
+                        Spacer()
+                    }
                 }
 
                 ModernRow(showDivider: false) {
-                    Toggle("Play Feedback Sounds", isOn: $audioManager.playFeedbackSounds)
+                    HStack {
+                        Toggle(isOn: $audioManager.playFeedbackSounds) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        Text("Play Feedback Sounds")
+                        Spacer()
+                    }
                 }
             }
         }
@@ -221,7 +249,7 @@ struct ShortcutsSettingsTab: View {
 
                 if audioManager.holdModeEnabled {
                     ModernRow(showDivider: false) {
-                        HStack(spacing: 16) {
+                        HStack(spacing: 50) {
                             Text("Shortcut")
                             ShortcutRecorder(
                                 keyCode: $audioManager.shortcutKeyCode,
@@ -253,7 +281,7 @@ struct ShortcutsSettingsTab: View {
 
                 if audioManager.toggleModeEnabled {
                     ModernRow(showDivider: false) {
-                        HStack(spacing: 16) {
+                        HStack(spacing: 50) {
                             Text("Shortcut")
                             ShortcutRecorder(
                                 keyCode: $audioManager.toggleShortcutKeyCode,
