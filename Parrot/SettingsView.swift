@@ -305,23 +305,20 @@ struct AudioSettingsTab: View {
     @Binding var inputDevices: [AVCaptureDevice]
     @Binding var outputDevices: [AudioManager.AudioOutputDevice]
 
-    private let pickerWidth: CGFloat = 220
-
     var body: some View {
         VStack(spacing: 20) {
             ModernSection(header: "Input Device") {
                 ModernRow(showDivider: false) {
                     HStack {
-                        Picker("Microphone", selection: $audioManager.selectedInputDevice) {
-                            Text("System Default").tag(nil as AVCaptureDevice?)
-                            Divider()
-                            ForEach(inputDevices, id: \.uniqueID) { device in
-                                Text(device.localizedName).tag(device as AVCaptureDevice?)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(minWidth: pickerWidth, maxWidth: pickerWidth)
+                        DevicePicker(
+                            selection: Binding(
+                                get: { audioManager.selectedInputDevice?.uniqueID },
+                                set: { newID in
+                                    audioManager.selectedInputDevice = inputDevices.first { $0.uniqueID == newID }
+                                }
+                            ),
+                            options: [("default", "System Default")] + inputDevices.map { ($0.uniqueID, $0.localizedName) }
+                        )
                         Spacer()
                     }
                 }
@@ -330,16 +327,13 @@ struct AudioSettingsTab: View {
             ModernSection(header: "Output Device") {
                 ModernRow(showDivider: false) {
                     HStack {
-                        Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
-                            Text("System Default").tag(nil as String?)
-                            Divider()
-                            ForEach(outputDevices) { device in
-                                Text(device.name).tag(device.uid as String?)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(minWidth: pickerWidth, maxWidth: pickerWidth)
+                        DevicePicker(
+                            selection: Binding(
+                                get: { audioManager.selectedOutputDeviceID },
+                                set: { audioManager.selectedOutputDeviceID = $0 == "default" ? nil : $0 }
+                            ),
+                            options: [("default", "System Default")] + outputDevices.map { ($0.uid, $0.name) }
+                        )
                         Spacer()
                     }
                 }
@@ -359,6 +353,53 @@ struct AudioSettingsTab: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct DevicePicker: View {
+    @Binding var selection: String?
+    let options: [(id: String, name: String)]
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.id) { option in
+                Button(action: {
+                    selection = option.id == "default" ? nil : option.id
+                }) {
+                    if (selection == nil && option.id == "default") || selection == option.id {
+                        Label(option.name, systemImage: "checkmark")
+                    } else {
+                        Text(option.name)
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Text(currentSelectionName)
+                    .foregroundColor(.primary)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(width: 200)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            )
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    var currentSelectionName: String {
+        if let sel = selection, let option = options.first(where: { $0.id == sel }) {
+            return option.name
+        }
+        return options.first?.name ?? "System Default"
     }
 }
 
