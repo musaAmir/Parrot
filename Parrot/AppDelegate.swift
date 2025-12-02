@@ -256,12 +256,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow?.isReleasedWhenClosed = false
             settingsWindow?.backgroundColor = .windowBackgroundColor
 
-            // Apply rounded corners
-            if let contentView = settingsWindow?.contentView {
-                contentView.wantsLayer = true
-                contentView.layer?.cornerRadius = 12
-                contentView.layer?.masksToBounds = true
-            }
+            // Apply rounded corners (macOS Tahoe style)
+            settingsWindow?.contentView?.wantsLayer = true
+            settingsWindow?.contentView?.layer?.cornerRadius = 22
+            settingsWindow?.contentView?.layer?.masksToBounds = true
         }
 
         permissionManager.refreshPermissions()
