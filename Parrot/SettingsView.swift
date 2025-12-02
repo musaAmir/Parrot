@@ -207,22 +207,29 @@ struct ShortcutsSettingsTab: View {
                 footer: "Press and hold the shortcut while speaking, release to play back"
             ) {
                 ModernRow(showDivider: audioManager.holdModeEnabled) {
-                    Toggle(isOn: $audioManager.holdModeEnabled) {
+                    HStack {
+                        Toggle(isOn: $audioManager.holdModeEnabled) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+
                         Text("Enable Hold to Record")
+                        Spacer()
                     }
-                    .toggleStyle(.checkbox)
                 }
 
                 if audioManager.holdModeEnabled {
                     ModernRow(showDivider: false) {
-                        Text("Shortcut")
-                            .frame(width: 80, alignment: .leading)
-                        Spacer()
-                        ShortcutRecorder(
-                            keyCode: $audioManager.shortcutKeyCode,
-                            modifierFlags: $audioManager.shortcutModifierFlags
-                        )
-                        .frame(width: 140, height: 32)
+                        HStack {
+                            Text("Shortcut")
+                            Spacer()
+                            ShortcutRecorder(
+                                keyCode: $audioManager.shortcutKeyCode,
+                                modifierFlags: $audioManager.shortcutModifierFlags
+                            )
+                            .frame(width: 140, height: 32)
+                        }
                     }
                 }
             }
@@ -232,22 +239,29 @@ struct ShortcutsSettingsTab: View {
                 footer: "Tap once to start recording, tap again to stop. Hold for 1.5s for hold mode."
             ) {
                 ModernRow(showDivider: audioManager.toggleModeEnabled) {
-                    Toggle(isOn: $audioManager.toggleModeEnabled) {
+                    HStack {
+                        Toggle(isOn: $audioManager.toggleModeEnabled) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+
                         Text("Enable Toggle to Record")
+                        Spacer()
                     }
-                    .toggleStyle(.checkbox)
                 }
 
                 if audioManager.toggleModeEnabled {
                     ModernRow(showDivider: false) {
-                        Text("Shortcut")
-                            .frame(width: 80, alignment: .leading)
-                        Spacer()
-                        ShortcutRecorder(
-                            keyCode: $audioManager.toggleShortcutKeyCode,
-                            modifierFlags: $audioManager.toggleShortcutModifierFlags
-                        )
-                        .frame(width: 140, height: 32)
+                        HStack {
+                            Text("Shortcut")
+                            Spacer()
+                            ShortcutRecorder(
+                                keyCode: $audioManager.toggleShortcutKeyCode,
+                                modifierFlags: $audioManager.toggleShortcutModifierFlags
+                            )
+                            .frame(width: 140, height: 32)
+                        }
                     }
                 }
             }
