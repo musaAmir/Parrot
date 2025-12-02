@@ -43,23 +43,27 @@ struct SettingsView: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 220)
         } detail: {
-            Group {
-                switch selectedTab {
-                case .general:
-                    GeneralSettingsTab(audioManager: audioManager)
-                case .shortcuts:
-                    ShortcutsSettingsTab(audioManager: audioManager)
-                case .audio:
-                    AudioSettingsTab(
-                        audioManager: audioManager,
-                        inputDevices: $inputDevices,
-                        outputDevices: $outputDevices
-                    )
-                case .permissions:
-                    PermissionsSettingsTab(permissionManager: permissionManager)
+            ScrollView {
+                VStack(spacing: 20) {
+                    switch selectedTab {
+                    case .general:
+                        GeneralSettingsTab(audioManager: audioManager)
+                    case .shortcuts:
+                        ShortcutsSettingsTab(audioManager: audioManager)
+                    case .audio:
+                        AudioSettingsTab(
+                            audioManager: audioManager,
+                            inputDevices: $inputDevices,
+                            outputDevices: $outputDevices
+                        )
+                    case .permissions:
+                        PermissionsSettingsTab(permissionManager: permissionManager)
+                    }
                 }
+                .padding(24)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(width: 650, height: 420)
         .onAppear {
@@ -70,59 +74,124 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Modern Rounded Section
+
+struct ModernSection<Content: View>: View {
+    let header: String?
+    let footer: String?
+    let content: Content
+
+    init(header: String? = nil, footer: String? = nil, @ViewBuilder content: () -> Content) {
+        self.header = header
+        self.footer = footer
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let header = header {
+                Text(header)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .padding(.leading, 4)
+            }
+
+            VStack(spacing: 0) {
+                content
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if let footer = footer {
+                Text(footer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+            }
+        }
+    }
+}
+
+struct ModernRow<Content: View>: View {
+    let content: Content
+    let showDivider: Bool
+
+    init(showDivider: Bool = true, @ViewBuilder content: () -> Content) {
+        self.showDivider = showDivider
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                content
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            if showDivider {
+                Divider()
+                    .padding(.leading, 16)
+            }
+        }
+    }
+}
+
 // MARK: - General Settings Tab
 
 struct GeneralSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
 
     var body: some View {
-        Form {
-            Section {
-                LabeledContent("Playback Delay") {
-                    HStack(spacing: 12) {
-                        Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
-                            .frame(width: 180)
-                        Text(String(format: "%.1f s", audioManager.playbackDelay))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 45, alignment: .trailing)
-                    }
+        VStack(spacing: 20) {
+            ModernSection(header: "Playback") {
+                ModernRow {
+                    Text("Playback Delay")
+                    Spacer()
+                    Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(String(format: "%.1f s", audioManager.playbackDelay))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 45, alignment: .trailing)
                 }
 
-                LabeledContent("Volume") {
-                    HStack(spacing: 8) {
-                        Image(systemName: "speaker.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.caption)
-                        Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
-                            .frame(width: 140)
-                        Image(systemName: "speaker.wave.3.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.caption)
-                        Text("\(Int(audioManager.playbackVolume * 100))%")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 40, alignment: .trailing)
-                    }
+                ModernRow(showDivider: false) {
+                    Text("Volume")
+                    Spacer()
+                    Image(systemName: "speaker.fill")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                    Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
+                        .frame(width: 120)
+                    Image(systemName: "speaker.wave.3.fill")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                    Text("\(Int(audioManager.playbackVolume * 100))%")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
                 }
-            } header: {
-                Text("Playback")
             }
 
-            Section("Appearance") {
-                Toggle("Show Dock Icon", isOn: $audioManager.showDockIcon)
-                    .onChange(of: audioManager.showDockIcon) { _, newValue in
-                        NSApp.setActivationPolicy(newValue ? .regular : .accessory)
-                    }
+            ModernSection(header: "Appearance") {
+                ModernRow {
+                    Toggle("Show Dock Icon", isOn: $audioManager.showDockIcon)
+                        .onChange(of: audioManager.showDockIcon) { _, newValue in
+                            NSApp.setActivationPolicy(newValue ? .regular : .accessory)
+                        }
+                }
 
-                Toggle("Show Playback Indicator", isOn: $audioManager.showPlaybackIndicator)
+                ModernRow {
+                    Toggle("Show Playback Indicator", isOn: $audioManager.showPlaybackIndicator)
+                }
 
-                Toggle("Play Feedback Sounds", isOn: $audioManager.playFeedbackSounds)
+                ModernRow(showDivider: false) {
+                    Toggle("Play Feedback Sounds", isOn: $audioManager.playFeedbackSounds)
+                }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .navigationTitle("General")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -132,52 +201,50 @@ struct ShortcutsSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
 
     var body: some View {
-        Form {
-            Section {
-                Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
+        VStack(spacing: 20) {
+            ModernSection(
+                header: "Hold to Record",
+                footer: "Press and hold the shortcut while speaking, release to play back"
+            ) {
+                ModernRow(showDivider: audioManager.holdModeEnabled) {
+                    Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
+                }
 
                 if audioManager.holdModeEnabled {
-                    HStack {
+                    ModernRow(showDivider: false) {
                         Text("Shortcut")
                         Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.shortcutKeyCode,
                             modifierFlags: $audioManager.shortcutModifierFlags
                         )
-                        .frame(width: 160, height: 32)
+                        .frame(width: 150, height: 32)
                     }
                 }
-            } header: {
-                Text("Hold to Record")
-            } footer: {
-                Text("Press and hold the shortcut while speaking, release to play back")
-                    .foregroundStyle(.secondary)
             }
 
-            Section {
-                Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
+            ModernSection(
+                header: "Toggle to Record",
+                footer: "Tap once to start recording, tap again to stop. Hold for 1.5s for hold mode."
+            ) {
+                ModernRow(showDivider: audioManager.toggleModeEnabled) {
+                    Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
+                }
 
                 if audioManager.toggleModeEnabled {
-                    HStack {
+                    ModernRow(showDivider: false) {
                         Text("Shortcut")
                         Spacer()
                         ShortcutRecorder(
                             keyCode: $audioManager.toggleShortcutKeyCode,
                             modifierFlags: $audioManager.toggleShortcutModifierFlags
                         )
-                        .frame(width: 160, height: 32)
+                        .frame(width: 150, height: 32)
                     }
                 }
-            } header: {
-                Text("Toggle to Record")
-            } footer: {
-                Text("Tap once to start recording, tap again to stop. Hold for 1.5s for hold mode.")
-                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .navigationTitle("Shortcuts")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -189,39 +256,48 @@ struct AudioSettingsTab: View {
     @Binding var outputDevices: [AudioManager.AudioOutputDevice]
 
     var body: some View {
-        Form {
-            Section("Input Device") {
-                Picker("Microphone", selection: $audioManager.selectedInputDevice) {
-                    Text("System Default").tag(nil as AVCaptureDevice?)
-                    Divider()
-                    ForEach(inputDevices, id: \.uniqueID) { device in
-                        Text(device.localizedName).tag(device as AVCaptureDevice?)
+        VStack(spacing: 20) {
+            ModernSection(header: "Input Device") {
+                ModernRow(showDivider: false) {
+                    Picker("Microphone", selection: $audioManager.selectedInputDevice) {
+                        Text("System Default").tag(nil as AVCaptureDevice?)
+                        Divider()
+                        ForEach(inputDevices, id: \.uniqueID) { device in
+                            Text(device.localizedName).tag(device as AVCaptureDevice?)
+                        }
                     }
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
                 }
-                .labelsHidden()
             }
 
-            Section("Output Device") {
-                Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
-                    Text("System Default").tag(nil as String?)
-                    Divider()
-                    ForEach(outputDevices) { device in
-                        Text(device.name).tag(device.uid as String?)
+            ModernSection(header: "Output Device") {
+                ModernRow(showDivider: false) {
+                    Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
+                        Text("System Default").tag(nil as String?)
+                        Divider()
+                        ForEach(outputDevices) { device in
+                            Text(device.name).tag(device.uid as String?)
+                        }
                     }
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
                 }
-                .labelsHidden()
             }
 
-            Section {
-                Button("Refresh Devices") {
-                    inputDevices = audioManager.getAvailableInputDevices()
-                    outputDevices = audioManager.getAvailableOutputDevices()
+            ModernSection {
+                ModernRow(showDivider: false) {
+                    Spacer()
+                    Button("Refresh Devices") {
+                        inputDevices = audioManager.getAvailableInputDevices()
+                        outputDevices = audioManager.getAvailableOutputDevices()
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
                 }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .navigationTitle("Audio")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -231,10 +307,13 @@ struct PermissionsSettingsTab: View {
     @ObservedObject var permissionManager: PermissionManager
 
     var body: some View {
-        Form {
-            Section {
-                HStack {
-                    Label("Microphone", systemImage: "mic.fill")
+        VStack(spacing: 20) {
+            ModernSection(
+                header: "Microphone",
+                footer: "Required to record your voice"
+            ) {
+                ModernRow(showDivider: false) {
+                    Label("Microphone Access", systemImage: "mic.fill")
                     Spacer()
                     PermissionStatusView(status: permissionManager.microphoneStatus)
                     if permissionManager.microphoneStatus != .granted {
@@ -245,14 +324,14 @@ struct PermissionsSettingsTab: View {
                         .controlSize(.small)
                     }
                 }
-            } footer: {
-                Text("Required to record your voice")
-                    .foregroundStyle(.secondary)
             }
 
-            Section {
-                HStack {
-                    Label("Accessibility", systemImage: "hand.raised.fill")
+            ModernSection(
+                header: "Accessibility",
+                footer: "Required for global keyboard shortcuts to work"
+            ) {
+                ModernRow(showDivider: false) {
+                    Label("Accessibility Access", systemImage: "hand.raised.fill")
                     Spacer()
                     PermissionStatusView(status: permissionManager.accessibilityStatus)
                     if permissionManager.accessibilityStatus != .granted {
@@ -263,20 +342,20 @@ struct PermissionsSettingsTab: View {
                         .controlSize(.small)
                     }
                 }
-            } footer: {
-                Text("Required for global keyboard shortcuts to work")
-                    .foregroundStyle(.secondary)
             }
 
-            Section {
-                Button("Refresh Status") {
-                    permissionManager.refreshPermissions()
+            ModernSection {
+                ModernRow(showDivider: false) {
+                    Spacer()
+                    Button("Refresh Status") {
+                        permissionManager.refreshPermissions()
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
                 }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .navigationTitle("Permissions")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
