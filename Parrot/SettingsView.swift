@@ -228,7 +228,7 @@ struct ShortcutsSettingsTab: View {
                                 keyCode: $audioManager.shortcutKeyCode,
                                 modifierFlags: $audioManager.shortcutModifierFlags
                             )
-                            .frame(width: 140, height: 32)
+                            .frame(width: 180, height: 32)
                         }
                     }
                 }
@@ -260,7 +260,7 @@ struct ShortcutsSettingsTab: View {
                                 keyCode: $audioManager.toggleShortcutKeyCode,
                                 modifierFlags: $audioManager.toggleShortcutModifierFlags
                             )
-                            .frame(width: 140, height: 32)
+                            .frame(width: 180, height: 32)
                         }
                     }
                 }
