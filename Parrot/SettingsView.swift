@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  Parrot
 //
-//  Settings UI for delay, shortcuts, audio devices, and permissions
+//  Settings UI with modern macOS styling
 //
 
 import SwiftUI
@@ -14,185 +14,39 @@ struct SettingsView: View {
     var onClose: () -> Void
     @State private var inputDevices: [AVCaptureDevice] = []
     @State private var outputDevices: [AudioManager.AudioOutputDevice] = []
+    @State private var selectedTab = 0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                Text("Parrot Settings")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .padding(.bottom, 8)
-
-                // Playback Delay
-                GroupBox("Playback Delay") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
-                            Text(String(format: "%.1f s", audioManager.playbackDelay))
-                                .frame(width: 50)
-                                .monospacedDigit()
-                        }
-                        Text("Time between recording and playback")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
+        TabView(selection: $selectedTab) {
+            GeneralSettingsTab(audioManager: audioManager)
+                .tabItem {
+                    Label("General", systemImage: "gear")
                 }
+                .tag(0)
 
-                // Hold to Record
-                GroupBox("Hold to Record") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
-                        if audioManager.holdModeEnabled {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Shortcut:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                ShortcutRecorder(
-                                    keyCode: $audioManager.shortcutKeyCode,
-                                    modifierFlags: $audioManager.shortcutModifierFlags
-                                )
-                                .frame(height: 44)
-                                Text("Press and hold while speaking")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
+            ShortcutsSettingsTab(audioManager: audioManager)
+                .tabItem {
+                    Label("Shortcuts", systemImage: "command.square")
                 }
+                .tag(1)
 
-                // Toggle to Record
-                GroupBox("Toggle to Record") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
-                        if audioManager.toggleModeEnabled {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Shortcut:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                ShortcutRecorder(
-                                    keyCode: $audioManager.toggleShortcutKeyCode,
-                                    modifierFlags: $audioManager.toggleShortcutModifierFlags
-                                )
-                                .frame(height: 44)
-                                Text("Tap to start/stop, or hold 1.5s for hold mode")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
+            AudioSettingsTab(
+                audioManager: audioManager,
+                inputDevices: $inputDevices,
+                outputDevices: $outputDevices
+            )
+                .tabItem {
+                    Label("Audio", systemImage: "speaker.wave.2")
                 }
+                .tag(2)
 
-                // Playback Volume
-                GroupBox("Playback Volume") {
-                    HStack {
-                        Image(systemName: "speaker.fill")
-                        Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
-                        Image(systemName: "speaker.wave.3.fill")
-                        Text(String(format: "%d%%", Int(audioManager.playbackVolume * 100)))
-                            .frame(width: 45)
-                            .monospacedDigit()
-                    }
-                    .padding(.vertical, 4)
+            PermissionsSettingsTab(permissionManager: permissionManager)
+                .tabItem {
+                    Label("Permissions", systemImage: "lock.shield")
                 }
-
-                // Audio Input Device
-                GroupBox("Audio Input") {
-                    Picker("Microphone", selection: $audioManager.selectedInputDevice) {
-                        Text("Default").tag(nil as AVCaptureDevice?)
-                        ForEach(inputDevices, id: \.uniqueID) { device in
-                            Text(device.localizedName).tag(device as AVCaptureDevice?)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                // Audio Output Device
-                GroupBox("Audio Output") {
-                    Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
-                        Text("Default").tag(nil as String?)
-                        ForEach(outputDevices) { device in
-                            Text(device.name).tag(device.uid as String?)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                // Permissions
-                GroupBox("Permissions") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Image(systemName: "mic.fill")
-                            Text("Microphone")
-                            Spacer()
-                            PermissionBadge(status: permissionManager.microphoneStatus)
-                            if permissionManager.microphoneStatus != .granted {
-                                Button("Grant") {
-                                    permissionManager.openSystemPreferences(for: "microphone")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-
-                        Divider()
-
-                        HStack {
-                            Image(systemName: "hand.raised.fill")
-                            Text("Accessibility")
-                            Spacer()
-                            PermissionBadge(status: permissionManager.accessibilityStatus)
-                            if permissionManager.accessibilityStatus != .granted {
-                                Button("Grant") {
-                                    permissionManager.openSystemPreferences(for: "accessibility")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-
-                        Text("Accessibility is required for global keyboard shortcuts")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                // Options
-                GroupBox("Options") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Show Dock Icon", isOn: $audioManager.showDockIcon)
-                            .onChange(of: audioManager.showDockIcon) { newValue in
-                                NSApp.setActivationPolicy(newValue ? .regular : .accessory)
-                            }
-                        Toggle("Show Playback Indicator", isOn: $audioManager.showPlaybackIndicator)
-                        Toggle("Play Feedback Sounds", isOn: $audioManager.playFeedbackSounds)
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                // Buttons
-                HStack {
-                    Button("Refresh") {
-                        permissionManager.refreshPermissions()
-                        inputDevices = audioManager.getAvailableInputDevices()
-                        outputDevices = audioManager.getAvailableOutputDevices()
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button("Save & Close") {
-                        audioManager.saveSettings()
-                        onClose()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-            .padding(24)
+                .tag(3)
         }
-        .frame(width: 450, height: 800)
+        .frame(width: 500, height: 400)
         .onAppear {
             inputDevices = audioManager.getAvailableInputDevices()
             outputDevices = audioManager.getAvailableOutputDevices()
@@ -201,20 +55,232 @@ struct SettingsView: View {
     }
 }
 
-struct PermissionBadge: View {
+// MARK: - General Settings Tab
+
+struct GeneralSettingsTab: View {
+    @ObservedObject var audioManager: AudioManager
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Playback Delay") {
+                    HStack(spacing: 12) {
+                        Slider(value: $audioManager.playbackDelay, in: 0.0...5.0, step: 0.1)
+                            .frame(width: 180)
+                        Text(String(format: "%.1f s", audioManager.playbackDelay))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 45, alignment: .trailing)
+                    }
+                }
+            } header: {
+                Text("Playback")
+            } footer: {
+                Text("Time to wait before playing back your recording")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Volume") {
+                    HStack(spacing: 12) {
+                        Image(systemName: "speaker.fill")
+                            .foregroundStyle(.secondary)
+                        Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
+                            .frame(width: 140)
+                        Image(systemName: "speaker.wave.3.fill")
+                            .foregroundStyle(.secondary)
+                        Text("\(Int(audioManager.playbackVolume * 100))%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+            }
+
+            Section("Appearance") {
+                Toggle("Show Dock Icon", isOn: $audioManager.showDockIcon)
+                    .onChange(of: audioManager.showDockIcon) { _, newValue in
+                        NSApp.setActivationPolicy(newValue ? .regular : .accessory)
+                    }
+
+                Toggle("Show Playback Indicator", isOn: $audioManager.showPlaybackIndicator)
+
+                Toggle("Play Feedback Sounds", isOn: $audioManager.playFeedbackSounds)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Shortcuts Settings Tab
+
+struct ShortcutsSettingsTab: View {
+    @ObservedObject var audioManager: AudioManager
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable Hold to Record", isOn: $audioManager.holdModeEnabled)
+
+                if audioManager.holdModeEnabled {
+                    LabeledContent("Shortcut") {
+                        ShortcutRecorder(
+                            keyCode: $audioManager.shortcutKeyCode,
+                            modifierFlags: $audioManager.shortcutModifierFlags
+                        )
+                        .frame(width: 180, height: 36)
+                    }
+                }
+            } header: {
+                Text("Hold to Record")
+            } footer: {
+                Text("Press and hold the shortcut while speaking, release to play back")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Enable Toggle to Record", isOn: $audioManager.toggleModeEnabled)
+
+                if audioManager.toggleModeEnabled {
+                    LabeledContent("Shortcut") {
+                        ShortcutRecorder(
+                            keyCode: $audioManager.toggleShortcutKeyCode,
+                            modifierFlags: $audioManager.toggleShortcutModifierFlags
+                        )
+                        .frame(width: 180, height: 36)
+                    }
+                }
+            } header: {
+                Text("Toggle to Record")
+            } footer: {
+                Text("Tap once to start recording, tap again to stop. Hold for 1.5s for hold mode.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Audio Settings Tab
+
+struct AudioSettingsTab: View {
+    @ObservedObject var audioManager: AudioManager
+    @Binding var inputDevices: [AVCaptureDevice]
+    @Binding var outputDevices: [AudioManager.AudioOutputDevice]
+
+    var body: some View {
+        Form {
+            Section("Input Device") {
+                Picker("Microphone", selection: $audioManager.selectedInputDevice) {
+                    Text("System Default").tag(nil as AVCaptureDevice?)
+                    Divider()
+                    ForEach(inputDevices, id: \.uniqueID) { device in
+                        Text(device.localizedName).tag(device as AVCaptureDevice?)
+                    }
+                }
+                .labelsHidden()
+            }
+
+            Section("Output Device") {
+                Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
+                    Text("System Default").tag(nil as String?)
+                    Divider()
+                    ForEach(outputDevices) { device in
+                        Text(device.name).tag(device.uid as String?)
+                    }
+                }
+                .labelsHidden()
+            }
+
+            Section {
+                Button("Refresh Devices") {
+                    inputDevices = audioManager.getAvailableInputDevices()
+                    outputDevices = audioManager.getAvailableOutputDevices()
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Permissions Settings Tab
+
+struct PermissionsSettingsTab: View {
+    @ObservedObject var permissionManager: PermissionManager
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Label("Microphone", systemImage: "mic.fill")
+                    Spacer()
+                    PermissionStatusView(status: permissionManager.microphoneStatus)
+                    if permissionManager.microphoneStatus != .granted {
+                        Button("Open Settings") {
+                            permissionManager.openSystemPreferences(for: "microphone")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            } footer: {
+                Text("Required to record your voice")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Label("Accessibility", systemImage: "hand.raised.fill")
+                    Spacer()
+                    PermissionStatusView(status: permissionManager.accessibilityStatus)
+                    if permissionManager.accessibilityStatus != .granted {
+                        Button("Open Settings") {
+                            permissionManager.openSystemPreferences(for: "accessibility")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            } footer: {
+                Text("Required for global keyboard shortcuts to work")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button("Refresh Status") {
+                    permissionManager.refreshPermissions()
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Supporting Views
+
+struct PermissionStatusView: View {
     let status: PermissionManager.PermissionStatus
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Circle()
-                .fill(Color(status.color))
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
             Text(status.displayText)
-                .font(.caption)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color(status.color).opacity(0.15))
-        .cornerRadius(8)
+    }
+
+    var statusColor: Color {
+        switch status {
+        case .granted: return .green
+        case .denied: return .red
+        case .notDetermined: return .orange
+        }
     }
 }

@@ -79,7 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "bird.fill", accessibilityDescription: "Parrot")
+            button.image = NSImage(systemSymbolName: "waveform.circle", accessibilityDescription: "Parrot")
         }
 
         let menu = NSMenu()
@@ -250,7 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = NSWindow(contentViewController: hostingController)
             settingsWindow?.title = "Parrot Settings"
             settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 450, height: 800))
+            settingsWindow?.setContentSize(NSSize(width: 500, height: 400))
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
         }
