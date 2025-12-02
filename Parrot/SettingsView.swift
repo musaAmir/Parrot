@@ -318,7 +318,7 @@ struct AudioSettingsTab: View {
                                 }
                             ),
                             options: [("default", "System Default")] + inputDevices.map { ($0.uniqueID, $0.localizedName) }
-                    
+                        )
                         Spacer()
                     }
                 }
