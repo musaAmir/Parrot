@@ -309,41 +309,48 @@ struct AudioSettingsTab: View {
         VStack(spacing: 20) {
             ModernSection(header: "Input Device") {
                 ModernRow(showDivider: false) {
-                    Picker("Microphone", selection: $audioManager.selectedInputDevice) {
-                        Text("System Default").tag(nil as AVCaptureDevice?)
-                        Divider()
-                        ForEach(inputDevices, id: \.uniqueID) { device in
-                            Text(device.localizedName).tag(device as AVCaptureDevice?)
+                    HStack {
+                        Picker("Microphone", selection: $audioManager.selectedInputDevice) {
+                            Text("System Default").tag(nil as AVCaptureDevice?)
+                            Divider()
+                            ForEach(inputDevices, id: \.uniqueID) { device in
+                                Text(device.localizedName).tag(device as AVCaptureDevice?)
+                            }
                         }
+                        .labelsHidden()
+                        .frame(width: 200)
+                        Spacer()
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
                 }
             }
 
             ModernSection(header: "Output Device") {
                 ModernRow(showDivider: false) {
-                    Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
-                        Text("System Default").tag(nil as String?)
-                        Divider()
-                        ForEach(outputDevices) { device in
-                            Text(device.name).tag(device.uid as String?)
+                    HStack {
+                        Picker("Speaker", selection: $audioManager.selectedOutputDeviceID) {
+                            Text("System Default").tag(nil as String?)
+                            Divider()
+                            ForEach(outputDevices) { device in
+                                Text(device.name).tag(device.uid as String?)
+                            }
                         }
+                        .labelsHidden()
+                        .frame(width: 200)
+                        Spacer()
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
                 }
             }
 
             ModernSection {
                 ModernRow(showDivider: false) {
-                    Spacer()
-                    Button("Refresh Devices") {
-                        inputDevices = audioManager.getAvailableInputDevices()
-                        outputDevices = audioManager.getAvailableOutputDevices()
+                    HStack {
+                        Button("Refresh Devices") {
+                            inputDevices = audioManager.getAvailableInputDevices()
+                            outputDevices = audioManager.getAvailableOutputDevices()
+                        }
+                        .buttonStyle(.bordered)
+                        Spacer()
                     }
-                    .buttonStyle(.bordered)
-                    Spacer()
                 }
             }
         }
