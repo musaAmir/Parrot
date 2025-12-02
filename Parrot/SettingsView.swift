@@ -2,51 +2,66 @@
 //  SettingsView.swift
 //  Parrot
 //
-//  Settings UI with modern macOS styling
+//  Settings UI with modern macOS sidebar navigation
 //
 
 import SwiftUI
 import AVFoundation
 
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General"
+    case shortcuts = "Shortcuts"
+    case audio = "Audio"
+    case permissions = "Permissions"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "gear"
+        case .shortcuts: return "command.square"
+        case .audio: return "speaker.wave.2"
+        case .permissions: return "lock.shield"
+        }
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var audioManager: AudioManager
     @ObservedObject var permissionManager: PermissionManager
     var onClose: () -> Void
+    @State private var selectedTab: SettingsTab = .general
     @State private var inputDevices: [AVCaptureDevice] = []
     @State private var outputDevices: [AudioManager.AudioOutputDevice] = []
-    @State private var selectedTab = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            GeneralSettingsTab(audioManager: audioManager)
-                .tabItem {
-                    Label("General", systemImage: "gear")
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: $selectedTab) { tab in
+                Label(tab.rawValue, systemImage: tab.icon)
+                    .tag(tab)
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 220)
+        } detail: {
+            Group {
+                switch selectedTab {
+                case .general:
+                    GeneralSettingsTab(audioManager: audioManager)
+                case .shortcuts:
+                    ShortcutsSettingsTab(audioManager: audioManager)
+                case .audio:
+                    AudioSettingsTab(
+                        audioManager: audioManager,
+                        inputDevices: $inputDevices,
+                        outputDevices: $outputDevices
+                    )
+                case .permissions:
+                    PermissionsSettingsTab(permissionManager: permissionManager)
                 }
-                .tag(0)
-
-            ShortcutsSettingsTab(audioManager: audioManager)
-                .tabItem {
-                    Label("Shortcuts", systemImage: "command.square")
-                }
-                .tag(1)
-
-            AudioSettingsTab(
-                audioManager: audioManager,
-                inputDevices: $inputDevices,
-                outputDevices: $outputDevices
-            )
-                .tabItem {
-                    Label("Audio", systemImage: "speaker.wave.2")
-                }
-                .tag(2)
-
-            PermissionsSettingsTab(permissionManager: permissionManager)
-                .tabItem {
-                    Label("Permissions", systemImage: "lock.shield")
-                }
-                .tag(3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 600, height: 400)
         .onAppear {
             inputDevices = audioManager.getAvailableInputDevices()
             outputDevices = audioManager.getAvailableOutputDevices()
@@ -73,28 +88,25 @@ struct GeneralSettingsTab: View {
                             .frame(width: 45, alignment: .trailing)
                     }
                 }
-            } header: {
-                Text("Playback")
-            } footer: {
-                Text("Time to wait before playing back your recording")
-                    .foregroundStyle(.secondary)
-            }
 
-            Section {
                 LabeledContent("Volume") {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         Image(systemName: "speaker.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
                         Slider(value: $audioManager.playbackVolume, in: 0.0...1.0, step: 0.05)
                             .frame(width: 140)
                         Image(systemName: "speaker.wave.3.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
                         Text("\(Int(audioManager.playbackVolume * 100))%")
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
+            } header: {
+                Text("Playback")
             }
 
             Section("Appearance") {
@@ -110,6 +122,7 @@ struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .navigationTitle("General")
     }
 }
 
@@ -160,6 +173,7 @@ struct ShortcutsSettingsTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .navigationTitle("Shortcuts")
     }
 }
 
@@ -203,6 +217,7 @@ struct AudioSettingsTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .navigationTitle("Audio")
     }
 }
 
@@ -257,6 +272,7 @@ struct PermissionsSettingsTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .navigationTitle("Permissions")
     }
 }
 

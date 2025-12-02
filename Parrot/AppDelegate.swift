@@ -250,7 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = NSWindow(contentViewController: hostingController)
             settingsWindow?.title = "Parrot Settings"
             settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 500, height: 400))
+            settingsWindow?.setContentSize(NSSize(width: 600, height: 400))
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
         }
