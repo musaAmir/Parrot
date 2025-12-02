@@ -10,6 +10,9 @@
 		AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002EC5AF2800000001 /* ParrotApp.swift */; };
 		AA0001032EC5AF2800000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001022EC5AF2800000002 /* AppDelegate.swift */; };
 		AA0001052EC5AF2C00000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0001042EC5AF2C00000003 /* Assets.xcassets */; };
+		AA0001102EC5AF2C00000020 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001112EC5AF2C00000021 /* AudioManager.swift */; };
+		AA0001122EC5AF2C00000022 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001132EC5AF2C00000023 /* PermissionManager.swift */; };
+		AA0001142EC5AF2C00000024 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001152EC5AF2C00000025 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +22,9 @@
 		AA0001042EC5AF2C00000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA0001062EC5AF2C00000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0001072EC5AF2C00000005 /* Parrot.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Parrot.entitlements; sourceTree = "<group>"; };
+		AA0001112EC5AF2C00000021 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
+		AA0001132EC5AF2C00000023 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		AA0001152EC5AF2C00000025 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +59,9 @@
 			children = (
 				AA0001002EC5AF2800000001 /* ParrotApp.swift */,
 				AA0001022EC5AF2800000002 /* AppDelegate.swift */,
+				AA0001112EC5AF2C00000021 /* AudioManager.swift */,
+				AA0001132EC5AF2C00000023 /* PermissionManager.swift */,
+				AA0001152EC5AF2C00000025 /* SettingsView.swift */,
 				AA0001042EC5AF2C00000003 /* Assets.xcassets */,
 				AA0001062EC5AF2C00000004 /* Info.plist */,
 				AA0001072EC5AF2C00000005 /* Parrot.entitlements */,
@@ -131,6 +140,9 @@
 			files = (
 				AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */,
 				AA0001032EC5AF2800000002 /* AppDelegate.swift in Sources */,
+				AA0001102EC5AF2C00000020 /* AudioManager.swift in Sources */,
+				AA0001122EC5AF2C00000022 /* PermissionManager.swift in Sources */,
+				AA0001142EC5AF2C00000024 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
