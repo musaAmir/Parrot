@@ -10,6 +10,7 @@ import SwiftUI
 import Carbon.HIToolbox
 import AVFoundation
 import Combine
+import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
@@ -19,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var permissionCheckTimer: Timer?
     var eventTapCreationFailed = false
     var cancellables = Set<AnyCancellable>()
+    var launchAtLoginItem: NSMenuItem?
 
     // Indicator windows
     var recordingIndicatorWindow: RecordingIndicatorWindow?
@@ -84,6 +86,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem.separator())
+
+        launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        launchAtLoginItem?.target = self
+        updateLaunchAtLoginState()
+        menu.addItem(launchAtLoginItem!)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
 
@@ -262,6 +271,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func quit() {
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+            } else {
+                try service.register()
+            }
+        } catch {
+            print("Failed to toggle launch at login: \(error)")
+        }
+        updateLaunchAtLoginState()
+    }
+
+    func updateLaunchAtLoginState() {
+        let isEnabled = SMAppService.mainApp.status == .enabled
+        launchAtLoginItem?.state = isEnabled ? .on : .off
     }
 
     // MARK: - Permission Monitoring
