@@ -154,6 +154,8 @@ class AudioManager: ObservableObject {
         UserDefaults.standard.set(playbackVolume, forKey: "playbackVolume")
         if let deviceID = selectedOutputDeviceID {
             UserDefaults.standard.set(deviceID, forKey: "selectedOutputDeviceID")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "selectedOutputDeviceID")
         }
         UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
         UserDefaults.standard.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
