@@ -206,6 +206,20 @@ struct GeneralSettingsTab: View {
                     }
                 }
 
+                ModernRow {
+                    HStack(spacing: 12) {
+                        Text("Overlay Duration")
+                            .frame(width: labelWidth, alignment: .leading)
+                        Slider(value: $audioManager.overlayDismissDelay, in: 1.0...20.0, step: 1.0)
+                            .frame(width: sliderWidth)
+                        Text("\(Int(audioManager.overlayDismissDelay)) s")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: valueWidth, alignment: .trailing)
+                        Spacer()
+                    }
+                }
+
                 ModernRow(showDivider: false) {
                     HStack {
                         Toggle(isOn: $audioManager.playFeedbackSounds) {

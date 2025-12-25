@@ -10,11 +10,13 @@ import AppKit
 import Combine
 import CoreAudio
 
-class AudioManager: ObservableObject {
+class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var playbackDelay: Double = 0.5
     @Published var selectedInputDevice: AVCaptureDevice?
     @Published var isRecording = false
     @Published var isPlaying = false
+    @Published var isPaused = false
+    @Published var hasSoundStarted = false
     @Published var playbackProgress: Double = 0.0
 
     // Enable/disable flags for each mode
@@ -37,6 +39,7 @@ class AudioManager: ObservableObject {
     @Published var showDockIcon: Bool = false
     @Published var showPlaybackIndicator: Bool = true
     @Published var playFeedbackSounds: Bool = false
+    @Published var overlayDismissDelay: Double = 5.0  // 1-20 seconds
 
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
@@ -45,7 +48,8 @@ class AudioManager: ObservableObject {
     private var isInitialLoad = true
     private var playbackTimer: Timer?
 
-    init() {
+    override init() {
+        super.init()
         loadSettings()
         DispatchQueue.main.async { [weak self] in
             self?.isInitialLoad = false
@@ -95,7 +99,7 @@ class AudioManager: ObservableObject {
         }
         .store(in: &cancellables)
 
-        $playFeedbackSounds
+        Publishers.CombineLatest($playFeedbackSounds, $overlayDismissDelay)
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self, !self.isInitialLoad else { return }
@@ -141,6 +145,9 @@ class AudioManager: ObservableObject {
         if let savedPlayFeedback = UserDefaults.standard.value(forKey: "playFeedbackSounds") as? Bool {
             playFeedbackSounds = savedPlayFeedback
         }
+        if let savedOverlayDelay = UserDefaults.standard.value(forKey: "overlayDismissDelay") as? Double {
+            overlayDismissDelay = savedOverlayDelay
+        }
     }
 
     func saveSettings() {
@@ -160,6 +167,7 @@ class AudioManager: ObservableObject {
         UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
         UserDefaults.standard.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
         UserDefaults.standard.set(playFeedbackSounds, forKey: "playFeedbackSounds")
+        UserDefaults.standard.set(overlayDismissDelay, forKey: "overlayDismissDelay")
     }
 
     func startRecording() {
@@ -211,17 +219,22 @@ class AudioManager: ObservableObject {
             }
 
             audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.delegate = self
             audioPlayer?.volume = Float(playbackVolume)
+            audioPlayer?.isMeteringEnabled = true
             audioPlayer?.play()
             isPlaying = true
+            isPaused = false
+            hasSoundStarted = false
             playbackProgress = 0.0
             print("Playing recording at volume: \(playbackVolume)")
 
             startPlaybackTimer()
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + (audioPlayer?.duration ?? 0) + 0.1) { [weak self] in
-                self?.stopPlayback()
-            }
+            // Remove the auto-stop timer since we now have manual controls
+            // But we still need to stop when it finishes naturally
+            // We'll handle that in the timer or delegate
+
         } catch {
             print("Failed to play recording: \(error)")
         }
@@ -231,17 +244,73 @@ class AudioManager: ObservableObject {
         playbackTimer?.invalidate()
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self = self, let player = self.audioPlayer else { return }
-            if player.duration > 0 {
-                self.playbackProgress = player.currentTime / player.duration
+
+            if player.isPlaying || self.isPaused {
+                if player.duration > 0 {
+                    self.playbackProgress = player.currentTime / player.duration
+                }
             }
         }
     }
 
-    private func stopPlayback() {
+    // MARK: - AVAudioPlayerDelegate
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onPlaybackFinished()
+        }
+    }
+
+    private func onPlaybackFinished() {
         playbackTimer?.invalidate()
         playbackTimer = nil
         isPlaying = false
+        isPaused = false
+        playbackProgress = 1.0
+        // Don't cleanup yet - allow replay
+    }
+
+    func togglePlayback() {
+        guard let player = audioPlayer else { return }
+        if player.isPlaying {
+            player.pause()
+            isPaused = true
+        } else {
+            player.play()
+            isPaused = false
+        }
+    }
+
+    func seek(to progress: Double) {
+        guard let player = audioPlayer else { return }
+        let newTime = player.duration * progress
+        player.currentTime = newTime
+        playbackProgress = progress
+
+        // If user interacts, show the UI immediately
+        if !hasSoundStarted {
+            hasSoundStarted = true
+        }
+    }
+
+    func replayRecording() {
+        guard let player = audioPlayer else { return }
+        player.currentTime = 0
+        player.play()
+        isPlaying = true
+        isPaused = false
         playbackProgress = 0.0
+        startPlaybackTimer()
+    }
+
+    func stopPlayback() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        isPlaying = false
+        isPaused = false
+        hasSoundStarted = false
+        playbackProgress = 0.0
+        audioPlayer?.stop()
         cleanupRecording()
     }
 

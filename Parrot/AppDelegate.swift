@@ -25,6 +25,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Indicator windows
     var recordingIndicatorWindow: RecordingIndicatorWindow?
     var playbackIndicatorWindow: PlaybackIndicatorWindow?
+    var overlayDismissTimer: Timer?
+    var playbackOverlayShown = false
 
     // Smart shortcut state tracking
     var toggleShortcutPressTime: Date?
@@ -48,6 +50,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupIndicatorWindows() {
         recordingIndicatorWindow = RecordingIndicatorWindow(appDelegate: self)
         playbackIndicatorWindow = PlaybackIndicatorWindow(audioManager: audioManager)
+        playbackIndicatorWindow?.onReplay = { [weak self] in
+            self?.resetOverlayDismissTimer()
+        }
+    }
+
+    func resetOverlayDismissTimer() {
+        overlayDismissTimer?.invalidate()
+        overlayDismissTimer = nil
+    }
+
+    func startOverlayDismissTimer() {
+        // Only start timer if overlay was shown
+        guard playbackOverlayShown else { return }
+
+        overlayDismissTimer?.invalidate()
+        overlayDismissTimer = Timer.scheduledTimer(withTimeInterval: audioManager.overlayDismissDelay, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            self.playbackIndicatorWindow?.hide()
+            self.playbackOverlayShown = false
+            self.overlayDismissTimer = nil
+        }
     }
 
     func setupRecordingObservers() {
@@ -69,9 +92,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] isPlaying in
                 guard let self = self else { return }
                 if isPlaying && self.audioManager.showPlaybackIndicator {
+                    self.resetOverlayDismissTimer()
                     self.playbackIndicatorWindow?.show()
-                } else {
-                    self.playbackIndicatorWindow?.hide()
+                    self.playbackOverlayShown = true
+                } else if !isPlaying {
+                    // Playback finished - start the dismiss timer
+                    self.startOverlayDismissTimer()
                 }
             }
             .store(in: &cancellables)
