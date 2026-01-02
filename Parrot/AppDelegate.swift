@@ -129,6 +129,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // Clean up all timers to prevent energy usage
+        stopPermissionMonitoring()
+        overlayDismissTimer?.invalidate()
+        overlayDismissTimer = nil
+        toggleShortcutHoldTimer?.invalidate()
+        toggleShortcutHoldTimer = nil
+    }
+
     func requestPermissions() {
         AVCaptureDevice.requestAccess(for: .audio) { granted in
             DispatchQueue.main.async { [weak self] in
@@ -321,9 +330,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Permission Monitoring
 
     func startPermissionMonitoring() {
-        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // Check if already granted before starting timer
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        if AXIsProcessTrustedWithOptions(options) {
+            print("Accessibility permission already granted")
+            return
+        }
+
+        // Check every 3 seconds instead of every 1 second to reduce energy usage
+        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             self?.checkAccessibilityPermissionAndRestart()
         }
+    }
+
+    func stopPermissionMonitoring() {
+        permissionCheckTimer?.invalidate()
+        permissionCheckTimer = nil
     }
 
     func checkAccessibilityPermissionAndRestart() {
@@ -332,8 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if accessEnabled {
             print("Accessibility permission granted! Restarting app...")
-            permissionCheckTimer?.invalidate()
-            permissionCheckTimer = nil
+            stopPermissionMonitoring()
             restartApp()
         }
     }

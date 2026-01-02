@@ -8,10 +8,15 @@
 import Cocoa
 import SwiftUI
 
+// Observable class to control animation state from window
+class RecordingAnimationState: ObservableObject {
+    @Published var isAnimating: Bool = false
+}
+
 class RecordingIndicatorWindow: NSWindow {
-    private var animationTimer: Timer?
     private var initialLocation: NSPoint = .zero
     weak var appDelegate: AppDelegate?
+    private let animationState = RecordingAnimationState()
 
     init(appDelegate: AppDelegate? = nil) {
         self.appDelegate = appDelegate
@@ -41,7 +46,7 @@ class RecordingIndicatorWindow: NSWindow {
         self.isMovableByWindowBackground = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
-        let hostingView = NSHostingView(rootView: RecordingIndicatorView())
+        let hostingView = NSHostingView(rootView: RecordingIndicatorView(animationState: animationState))
         self.contentView = hostingView
 
         self.orderOut(nil)
@@ -96,7 +101,7 @@ class RecordingIndicatorWindow: NSWindow {
     func show() {
         self.alphaValue = 0
         self.orderFront(nil)
-        startAnimation()
+        animationState.isAnimating = true
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
@@ -105,46 +110,48 @@ class RecordingIndicatorWindow: NSWindow {
     }
 
     func hide() {
+        animationState.isAnimating = false
+
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
             self.animator().alphaValue = 0.0
         }, completionHandler: {
             self.orderOut(nil)
-            self.stopAnimation()
         })
-    }
-
-    private func startAnimation() {
-        if let contentView = self.contentView as? NSHostingView<RecordingIndicatorView> {
-            contentView.rootView.isAnimating = true
-        }
-    }
-
-    private func stopAnimation() {
-        if let contentView = self.contentView as? NSHostingView<RecordingIndicatorView> {
-            contentView.rootView.isAnimating = false
-        }
     }
 }
 
 struct RecordingIndicatorView: View {
-    @State var isAnimating: Bool = false
-    @State private var phase: CGFloat = 0
-    @State private var opacity: Double = 0.7
+    @ObservedObject var animationState: RecordingAnimationState
+    @State private var isPulsing: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.white.opacity(opacity))
+                .foregroundStyle(.white.opacity(isPulsing ? 1.0 : 0.7))
 
             Text("Recording")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.9))
 
-            HStack(spacing: 3) {
-                ForEach(0..<5) { index in
-                    WaveformBar(index: index, phase: phase)
+            if animationState.isAnimating {
+                TimelineView(.animation(minimumInterval: 0.05)) { timeline in
+                    HStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { index in
+                            WaveformBar(index: index, date: timeline.date)
+                        }
+                    }
+                }
+            } else {
+                // Static waveform when not animating
+                HStack(spacing: 3) {
+                    ForEach(0..<5, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(Color.white.opacity(0.8))
+                            .frame(width: 3, height: 10)
+                            .frame(height: 22)
+                    }
                 }
             }
         }
@@ -157,39 +164,23 @@ struct RecordingIndicatorView: View {
                 .stroke(.white.opacity(0.15), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-        .onAppear {
-            startAnimation()
-        }
-        .onDisappear {
-            isAnimating = false
-        }
-    }
-
-    private func startAnimation() {
-        isAnimating = true
-
-        Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { timer in
-            guard isAnimating else {
-                timer.invalidate()
-                return
+        .onChange(of: animationState.isAnimating) { _, isAnimating in
+            if isAnimating {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isPulsing = false
+                }
             }
-            withAnimation(.linear(duration: 0.04)) {
-                phase += 0.2
-            }
-        }
-
-        withAnimation(
-            .easeInOut(duration: 1.0)
-            .repeatForever(autoreverses: true)
-        ) {
-            opacity = 1.0
         }
     }
 }
 
 struct WaveformBar: View {
     let index: Int
-    let phase: CGFloat
+    let date: Date
 
     var body: some View {
         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
@@ -199,7 +190,8 @@ struct WaveformBar: View {
     }
 
     private var barHeight: CGFloat {
-        let offset = CGFloat(index) * 0.5
+        let phase = date.timeIntervalSinceReferenceDate * 5.0
+        let offset = Double(index) * 0.5
         let amplitude = sin(phase + offset) * 0.5 + 0.5
         return 6 + amplitude * 16
     }

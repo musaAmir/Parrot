@@ -245,12 +245,18 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self = self, let player = self.audioPlayer else { return }
 
-            if player.isPlaying || self.isPaused {
+            // Only update progress when actually playing (not when paused)
+            if player.isPlaying {
                 if player.duration > 0 {
                     self.playbackProgress = player.currentTime / player.duration
                 }
             }
         }
+    }
+
+    private func stopPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
     }
 
     // MARK: - AVAudioPlayerDelegate
@@ -262,8 +268,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     private func onPlaybackFinished() {
-        playbackTimer?.invalidate()
-        playbackTimer = nil
+        stopPlaybackTimer()
         isPlaying = false
         isPaused = false
         playbackProgress = 1.0
@@ -275,9 +280,11 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if player.isPlaying {
             player.pause()
             isPaused = true
+            stopPlaybackTimer()  // Stop timer when paused to save energy
         } else {
             player.play()
             isPaused = false
+            startPlaybackTimer()  // Resume timer when playing
         }
     }
 
@@ -304,8 +311,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     func stopPlayback() {
-        playbackTimer?.invalidate()
-        playbackTimer = nil
+        stopPlaybackTimer()
         isPlaying = false
         isPaused = false
         hasSoundStarted = false
