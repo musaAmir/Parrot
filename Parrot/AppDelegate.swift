@@ -12,7 +12,7 @@ import AVFoundation
 import Combine
 import ServiceManagement
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem?
     var audioManager: AudioManager!
     var permissionManager: PermissionManager!
@@ -34,17 +34,61 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var toggleShortcutIsInHoldMode = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setupMenuBar()
         audioManager = AudioManager()
         permissionManager = PermissionManager()
+
+        // Apply appearance settings
+        applyDockIconSetting()
+        if audioManager.showMenuBarIcon {
+            setupMenuBar()
+        }
+
         setupIndicatorWindows()
         setupRecordingObservers()
+        setupAppearanceObservers()
         setupGlobalKeyboardShortcut()
         requestPermissions()
 
         if eventTapCreationFailed {
             startPermissionMonitoring()
         }
+    }
+
+    func applyDockIconSetting() {
+        NSApp.setActivationPolicy(audioManager.showDockIcon ? .regular : .accessory)
+    }
+
+    func setupAppearanceObservers() {
+        // Observe dock icon changes
+        audioManager.$showDockIcon
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showDock in
+                guard let self = self else { return }
+                // Ensure at least one icon is visible
+                if !showDock && !self.audioManager.showMenuBarIcon {
+                    self.audioManager.showMenuBarIcon = true
+                }
+                NSApp.setActivationPolicy(showDock ? .regular : .accessory)
+            }
+            .store(in: &cancellables)
+
+        // Observe menu bar icon changes
+        audioManager.$showMenuBarIcon
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showMenuBar in
+                guard let self = self else { return }
+                // Ensure at least one icon is visible
+                if !showMenuBar && !self.audioManager.showDockIcon {
+                    self.audioManager.showDockIcon = true
+                }
+                if showMenuBar && self.statusItem == nil {
+                    self.setupMenuBar()
+                } else if !showMenuBar && self.statusItem != nil {
+                    NSStatusBar.system.removeStatusItem(self.statusItem!)
+                    self.statusItem = nil
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func setupIndicatorWindows() {
@@ -127,6 +171,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ application: NSApplication) -> Bool {
         return false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Open settings when dock icon is clicked
+        openSettings()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -280,13 +330,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openSettings() {
+        // Temporarily switch to regular app to show window properly
+        if NSApp.activationPolicy() == .accessory {
+            NSApp.setActivationPolicy(.regular)
+        }
+
         if settingsWindow == nil {
             let settingsView = SettingsView(
                 audioManager: audioManager,
                 permissionManager: permissionManager,
                 onClose: { [weak self] in
-                    self?.settingsWindow?.close()
-                    self?.settingsWindow = nil
+                    self?.closeSettingsWindow()
                 }
             )
             let hostingController = NSHostingController(rootView: settingsView)
@@ -297,11 +351,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow?.setContentSize(NSSize(width: 650, height: 420))
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
+            settingsWindow?.delegate = self
         }
 
         permissionManager.refreshPermissions()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func closeSettingsWindow() {
+        settingsWindow?.close()
+        settingsWindow = nil
+        // Restore accessory mode if dock icon should be hidden
+        if !audioManager.showDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        // Check if it's the settings window closing
+        if let window = notification.object as? NSWindow, window == settingsWindow {
+            settingsWindow = nil
+            // Restore accessory mode if dock icon should be hidden
+            if !audioManager.showDockIcon {
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
     }
 
     @objc func quit() {

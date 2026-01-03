@@ -186,10 +186,19 @@ struct GeneralSettingsTab: View {
                         }
                         .toggleStyle(.checkbox)
                         .labelsHidden()
-                        .onChange(of: audioManager.showDockIcon) { _, newValue in
-                            NSApp.setActivationPolicy(newValue ? .regular : .accessory)
-                        }
                         Text("Show Dock Icon")
+                        Spacer()
+                    }
+                }
+
+                ModernRow {
+                    HStack {
+                        Toggle(isOn: $audioManager.showMenuBarIcon) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        Text("Show Menu Bar Icon")
                         Spacer()
                     }
                 }

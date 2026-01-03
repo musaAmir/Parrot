@@ -36,7 +36,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var selectedOutputDeviceID: String?
 
     // App appearance
-    @Published var showDockIcon: Bool = false
+    @Published var showDockIcon: Bool = true
+    @Published var showMenuBarIcon: Bool = true
     @Published var showPlaybackIndicator: Bool = true
     @Published var playFeedbackSounds: Bool = false
     @Published var overlayDismissDelay: Double = 5.0  // 1-20 seconds
@@ -90,7 +91,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             $playbackVolume,
             $selectedOutputDeviceID,
             $showDockIcon,
-            $showPlaybackIndicator
+            $showMenuBarIcon
         )
         .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
         .sink { [weak self] _ in
@@ -99,7 +100,12 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         .store(in: &cancellables)
 
-        Publishers.CombineLatest($playFeedbackSounds, $overlayDismissDelay)
+        Publishers.CombineLatest4(
+            $showPlaybackIndicator,
+            $playFeedbackSounds,
+            $overlayDismissDelay,
+            $showDockIcon  // Duplicate to trigger save
+        )
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self, !self.isInitialLoad else { return }
@@ -109,6 +115,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     func loadSettings() {
+        // Check if this is first launch (no settings saved yet)
+        let isFirstLaunch = UserDefaults.standard.value(forKey: "hasLaunchedBefore") == nil
+
         if let savedDelay = UserDefaults.standard.value(forKey: "playbackDelay") as? Double {
             playbackDelay = savedDelay
         }
@@ -139,6 +148,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if let savedShowDockIcon = UserDefaults.standard.value(forKey: "showDockIcon") as? Bool {
             showDockIcon = savedShowDockIcon
         }
+        if let savedShowMenuBarIcon = UserDefaults.standard.value(forKey: "showMenuBarIcon") as? Bool {
+            showMenuBarIcon = savedShowMenuBarIcon
+        }
         if let savedShowPlaybackIndicator = UserDefaults.standard.value(forKey: "showPlaybackIndicator") as? Bool {
             showPlaybackIndicator = savedShowPlaybackIndicator
         }
@@ -148,9 +160,26 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if let savedOverlayDelay = UserDefaults.standard.value(forKey: "overlayDismissDelay") as? Double {
             overlayDismissDelay = savedOverlayDelay
         }
+
+        // Safety: On first launch, always show dock icon
+        if isFirstLaunch {
+            showDockIcon = true
+            showMenuBarIcon = true
+            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+        }
+
+        // Safety: Ensure at least one icon is always visible
+        if !showDockIcon && !showMenuBarIcon {
+            showDockIcon = true
+        }
     }
 
     func saveSettings() {
+        // Safety: Ensure at least one icon is always visible before saving
+        if !showDockIcon && !showMenuBarIcon {
+            showDockIcon = true
+        }
+
         UserDefaults.standard.set(playbackDelay, forKey: "playbackDelay")
         UserDefaults.standard.set(holdModeEnabled, forKey: "holdModeEnabled")
         UserDefaults.standard.set(toggleModeEnabled, forKey: "toggleModeEnabled")
@@ -165,6 +194,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             UserDefaults.standard.removeObject(forKey: "selectedOutputDeviceID")
         }
         UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
+        UserDefaults.standard.set(showMenuBarIcon, forKey: "showMenuBarIcon")
         UserDefaults.standard.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
         UserDefaults.standard.set(playFeedbackSounds, forKey: "playFeedbackSounds")
         UserDefaults.standard.set(overlayDismissDelay, forKey: "overlayDismissDelay")
