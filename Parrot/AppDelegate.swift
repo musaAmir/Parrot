@@ -353,15 +353,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     }
 
     func requestPermissions() {
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            DispatchQueue.main.async { [weak self] in
-                self?.permissionManager.microphoneStatus = granted ? .granted : .denied
-                if !granted {
-                    self?.showPermissionAlert(for: "Microphone")
+        permissionManager.refreshPermissions()
+
+        // Only prompt when the user has never answered. Previously this ran a
+        // modal alert on every single launch once microphone access was denied,
+        // which made the app impossible to live with; the Permissions tab now
+        // carries that state instead.
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async { [weak self] in
+                    self?.permissionManager.microphoneStatus = granted ? .granted : .denied
+                    if !granted {
+                        self?.showPermissionAlert(for: "Microphone")
+                    }
                 }
             }
         }
-        permissionManager.checkAccessibilityPermission()
     }
 
     func showPermissionAlert(for permission: String) {

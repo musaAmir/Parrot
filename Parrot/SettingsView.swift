@@ -287,8 +287,30 @@ struct GeneralSettingsTab: View {
 struct ShortcutsSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
 
+    /// Both modes are driven by the same event tap, and the hold binding is
+    /// checked first, so an identical pair silently disables toggle mode.
+    private var shortcutsConflict: Bool {
+        audioManager.holdModeEnabled
+            && audioManager.toggleModeEnabled
+            && audioManager.shortcutKeyCode == audioManager.toggleShortcutKeyCode
+            && audioManager.shortcutModifierFlags == audioManager.toggleShortcutModifierFlags
+    }
+
     var body: some View {
         VStack(spacing: 20) {
+            if shortcutsConflict {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("Both modes use \(KeyCodeFormatter.shortcutString(keyCode: audioManager.shortcutKeyCode, modifierFlags: audioManager.shortcutModifierFlags)). Only Hold to Record will respond.")
+                        .font(.callout)
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
             ModernSection(
                 header: "Hold to Record",
                 footer: "Press and hold the shortcut while speaking, release to play back"

@@ -10,6 +10,7 @@
 		AA29FCAE433B756FC60B4B5E /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB90684301FA7058E262A8D /* Log.swift */; };
 		AA33DDA7E68C4EA2E5819512 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4A664F608868C5481CCC94 /* AudioDevices.swift */; };
 		AAA630D3F1DB0A632871FB31 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA51CEF66AF9E10731BA5214 /* RecordingStore.swift */; };
+		AA336E01C3CEDAD28922AF77 /* KeyCodeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA190111A7C5D06BFF165F7F /* KeyCodeFormatter.swift */; };
 		AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002EC5AF2800000001 /* ParrotApp.swift */; };
 		AA0001032EC5AF2800000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001022EC5AF2800000002 /* AppDelegate.swift */; };
 		AA0001052EC5AF2C00000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0001042EC5AF2C00000003 /* Assets.xcassets */; };
@@ -26,6 +27,7 @@
 		AAB90684301FA7058E262A8D /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		AA4A664F608868C5481CCC94 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		AA51CEF66AF9E10731BA5214 /* RecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStore.swift; sourceTree = "<group>"; };
+		AA190111A7C5D06BFF165F7F /* KeyCodeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCodeFormatter.swift; sourceTree = "<group>"; };
 		AA0001002EC5AF2800000001 /* ParrotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParrotApp.swift; sourceTree = "<group>"; };
 		AA0001022EC5AF2800000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA0001042EC5AF2C00000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -70,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0001002EC5AF2800000001 /* ParrotApp.swift */,
+				AA190111A7C5D06BFF165F7F /* KeyCodeFormatter.swift */,
 				AA51CEF66AF9E10731BA5214 /* RecordingStore.swift */,
 				AA4A664F608868C5481CCC94 /* AudioDevices.swift */,
 				AAB90684301FA7058E262A8D /* Log.swift */,
@@ -157,6 +160,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */,
+				AA336E01C3CEDAD28922AF77 /* KeyCodeFormatter.swift in Sources */,
 				AAA630D3F1DB0A632871FB31 /* RecordingStore.swift in Sources */,
 				AA33DDA7E68C4EA2E5819512 /* AudioDevices.swift in Sources */,
 				AA29FCAE433B756FC60B4B5E /* Log.swift in Sources */,
