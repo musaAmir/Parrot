@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA29FCAE433B756FC60B4B5E /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB90684301FA7058E262A8D /* Log.swift */; };
 		AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002EC5AF2800000001 /* ParrotApp.swift */; };
 		AA0001032EC5AF2800000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001022EC5AF2800000002 /* AppDelegate.swift */; };
 		AA0001052EC5AF2C00000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0001042EC5AF2C00000003 /* Assets.xcassets */; };
@@ -20,6 +21,7 @@
 
 /* Begin PBXFileReference section */
 		AA0000FF2EC5AF2800000000 /* Parrot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Parrot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAB90684301FA7058E262A8D /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		AA0001002EC5AF2800000001 /* ParrotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParrotApp.swift; sourceTree = "<group>"; };
 		AA0001022EC5AF2800000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA0001042EC5AF2C00000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -64,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0001002EC5AF2800000001 /* ParrotApp.swift */,
+				AAB90684301FA7058E262A8D /* Log.swift */,
 				AA0001022EC5AF2800000002 /* AppDelegate.swift */,
 				AA0001112EC5AF2C00000021 /* AudioManager.swift */,
 				AA0001132EC5AF2C00000023 /* PermissionManager.swift */,
@@ -148,6 +151,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */,
+				AA29FCAE433B756FC60B4B5E /* Log.swift in Sources */,
 				AA0001032EC5AF2800000002 /* AppDelegate.swift in Sources */,
 				AA0001102EC5AF2C00000020 /* AudioManager.swift in Sources */,
 				AA0001122EC5AF2C00000022 /* PermissionManager.swift in Sources */,
