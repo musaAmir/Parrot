@@ -146,6 +146,11 @@ struct GeneralSettingsTab: View {
     private let sliderWidth: CGFloat = 150
     private let valueWidth: CGFloat = 50
 
+    private var maxLengthLabel: String {
+        let seconds = Int(audioManager.maxRecordingDuration)
+        return seconds < 60 ? "\(seconds) s" : String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             ModernSection(header: "Playback") {
@@ -173,6 +178,37 @@ struct GeneralSettingsTab: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                             .frame(width: valueWidth, alignment: .trailing)
+                        Spacer()
+                    }
+                }
+            }
+
+            ModernSection(
+                header: "Recording",
+                footer: "Recordings stop automatically at the limit, so a stuck key can't record forever. Kept takes can be saved from the menu bar."
+            ) {
+                ModernRow {
+                    HStack(spacing: 12) {
+                        Text("Max Length")
+                            .frame(width: labelWidth, alignment: .leading)
+                        Slider(value: $audioManager.maxRecordingDuration, in: 10...600, step: 10)
+                            .frame(width: sliderWidth)
+                        Text(maxLengthLabel)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: valueWidth, alignment: .trailing)
+                        Spacer()
+                    }
+                }
+
+                ModernRow(showDivider: false) {
+                    HStack {
+                        Toggle(isOn: $audioManager.keepRecordings) {
+                            Text("Enable")
+                        }
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        Text("Keep Recent Recordings")
                         Spacer()
                     }
                 }

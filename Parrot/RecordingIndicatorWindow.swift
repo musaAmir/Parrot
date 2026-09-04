@@ -8,20 +8,14 @@
 import Cocoa
 import SwiftUI
 
-// Observable class to control animation state from window
-class RecordingAnimationState: ObservableObject {
-    @Published var isAnimating: Bool = false
-}
-
 class RecordingIndicatorWindow: NSWindow {
     private var initialLocation: NSPoint = .zero
     weak var appDelegate: AppDelegate?
-    private let animationState = RecordingAnimationState()
 
-    init(appDelegate: AppDelegate? = nil) {
+    init(audioManager: AudioManager, appDelegate: AppDelegate? = nil) {
         self.appDelegate = appDelegate
         let screenFrame = NSScreen.main?.frame ?? NSRect.zero
-        let windowWidth: CGFloat = 180
+        let windowWidth: CGFloat = 220
         let windowHeight: CGFloat = 50
 
         let savedOrigin = RecordingIndicatorWindow.loadSavedPosition(screenFrame: screenFrame, windowWidth: windowWidth, windowHeight: windowHeight)
@@ -46,7 +40,7 @@ class RecordingIndicatorWindow: NSWindow {
         self.isMovableByWindowBackground = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
-        let hostingView = NSHostingView(rootView: RecordingIndicatorView(animationState: animationState))
+        let hostingView = NSHostingView(rootView: RecordingIndicatorView(audioManager: audioManager))
         self.contentView = hostingView
 
         self.orderOut(nil)
@@ -101,7 +95,6 @@ class RecordingIndicatorWindow: NSWindow {
     func show() {
         self.alphaValue = 0
         self.orderFront(nil)
-        animationState.isAnimating = true
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
@@ -110,8 +103,6 @@ class RecordingIndicatorWindow: NSWindow {
     }
 
     func hide() {
-        animationState.isAnimating = false
-
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
             self.animator().alphaValue = 0.0
@@ -121,39 +112,50 @@ class RecordingIndicatorWindow: NSWindow {
     }
 }
 
+/// Recording indicator showing the live microphone level and elapsed time.
+///
+/// The bars used to be a `sin()` curve on a timer, so they looked identical
+/// whether you were talking or the mic was muted. They now scroll a short
+/// history of real level readings from `AVAudioRecorder`'s meters.
 struct RecordingIndicatorView: View {
-    @ObservedObject var animationState: RecordingAnimationState
+    @ObservedObject var audioManager: AudioManager
+    @State private var levels: [Double] = Array(repeating: 0, count: barCount)
     @State private var isPulsing: Bool = false
+
+    private static let barCount = 14
+    private static let barHeight: CGFloat = 22
+
+    /// Warn once the recording is within this many seconds of the auto-stop cap.
+    private static let warningWindow: TimeInterval = 10
+
+    private var remaining: TimeInterval {
+        max(0, audioManager.maxRecordingDuration - audioManager.recordingDuration)
+    }
+
+    private var isRunningOut: Bool {
+        remaining <= Self.warningWindow
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.white.opacity(isPulsing ? 1.0 : 0.7))
+                .foregroundStyle(.red.opacity(isPulsing ? 1.0 : 0.45))
 
-            Text("Recording")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
-
-            if animationState.isAnimating {
-                TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-                    HStack(spacing: 3) {
-                        ForEach(0..<5, id: \.self) { index in
-                            WaveformBar(index: index, date: timeline.date)
-                        }
-                    }
-                }
-            } else {
-                // Static waveform when not animating
-                HStack(spacing: 3) {
-                    ForEach(0..<5, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(Color.white.opacity(0.8))
-                            .frame(width: 3, height: 10)
-                            .frame(height: 22)
-                    }
+            HStack(spacing: 3) {
+                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(.white.opacity(0.85))
+                        .frame(width: 3, height: 3 + level * (Self.barHeight - 3))
+                        .frame(height: Self.barHeight)
                 }
             }
+            .animation(.linear(duration: 0.05), value: levels)
+
+            Text(timeLabel)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(isRunningOut ? .orange : .white.opacity(0.9))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -164,35 +166,28 @@ struct RecordingIndicatorView: View {
                 .stroke(.white.opacity(0.15), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-        .onChange(of: animationState.isAnimating) { _, isAnimating in
-            if isAnimating {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            } else {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isPulsing = false
-                }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+        }
+        .onReceive(audioManager.$recordingLevel) { level in
+            levels.removeFirst()
+            levels.append(level)
+        }
+        .onChange(of: audioManager.isRecording) { _, isRecording in
+            if !isRecording {
+                levels = Array(repeating: 0, count: Self.barCount)
             }
         }
     }
-}
 
-struct WaveformBar: View {
-    let index: Int
-    let date: Date
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-            .fill(Color.white.opacity(0.8))
-            .frame(width: 3, height: barHeight)
-            .frame(height: 22)
-    }
-
-    private var barHeight: CGFloat {
-        let phase = date.timeIntervalSinceReferenceDate * 5.0
-        let offset = Double(index) * 0.5
-        let amplitude = sin(phase + offset) * 0.5 + 0.5
-        return 6 + amplitude * 16
+    /// Counts elapsed time normally, and switches to a countdown once the
+    /// auto-stop is close, so a long take does not end without warning.
+    private var timeLabel: String {
+        let seconds = isRunningOut ? remaining : audioManager.recordingDuration
+        let value = Int(seconds.rounded())
+        let text = String(format: "%d:%02d", value / 60, value % 60)
+        return isRunningOut ? "-" + text : text
     }
 }

@@ -312,6 +312,12 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             Log.audio.error("No recording to play")
             return
         }
+        play(url: url)
+    }
+
+    /// Plays an arbitrary stored take, e.g. one picked from the menu bar.
+    func play(url: URL) {
+        recordedFileURL = url
 
         applyDefaultDevices(input: false, output: true)
 

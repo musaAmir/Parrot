@@ -11,6 +11,7 @@ import Carbon.HIToolbox
 import AVFoundation
 import Combine
 import ServiceManagement
+import UniformTypeIdentifiers
 import os
 
 /// A key binding in the form the event tap needs it, with `CGEventFlags` already
@@ -53,7 +54,7 @@ final class ShortcutSnapshot: @unchecked Sendable {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem?
     var audioManager: AudioManager!
     var permissionManager: PermissionManager!
@@ -62,6 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var eventTapCreationFailed = false
     var cancellables = Set<AnyCancellable>()
     var launchAtLoginItem: NSMenuItem?
+    var recentRecordingsItem: NSMenuItem?
 
     // Global keyboard shortcut plumbing
     private var eventTap: CFMachPort?
@@ -142,7 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func setupIndicatorWindows() {
-        recordingIndicatorWindow = RecordingIndicatorWindow(appDelegate: self)
+        recordingIndicatorWindow = RecordingIndicatorWindow(audioManager: audioManager, appDelegate: self)
         playbackIndicatorWindow = PlaybackIndicatorWindow(audioManager: audioManager)
         playbackIndicatorWindow?.onReplay = { [weak self] in
             self?.resetOverlayDismissTimer()
@@ -205,8 +207,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
+        menu.delegate = self
+
+        let saveItem = NSMenuItem(title: "Save Last Recording…", action: #selector(saveLastRecording), keyEquivalent: "s")
+        saveItem.target = self
+        menu.addItem(saveItem)
+
+        recentRecordingsItem = NSMenuItem(title: "Recent Recordings", action: nil, keyEquivalent: "")
+        recentRecordingsItem?.submenu = NSMenu()
+        menu.addItem(recentRecordingsItem!)
+
         menu.addItem(NSMenuItem.separator())
+
+        let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         launchAtLoginItem?.target = self
@@ -214,9 +229,103 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(launchAtLoginItem!)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
+
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
 
         statusItem?.menu = menu
+    }
+
+    // MARK: - Recordings menu
+
+    /// Rebuilt each time the menu opens rather than kept in sync, since the list
+    /// only matters while it is on screen.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu == statusItem?.menu else { return }
+
+        updateLaunchAtLoginState()
+
+        let submenu = NSMenu()
+        let recordings = audioManager.recentRecordings()
+
+        if recordings.isEmpty {
+            let empty = NSMenuItem(title: "No recordings yet", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            submenu.addItem(empty)
+        } else {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+
+            for recording in recordings {
+                let when = formatter.localizedString(for: recording.createdAt, relativeTo: Date())
+                let item = NSMenuItem(
+                    title: "\(recording.displayName)  ·  \(when)",
+                    action: #selector(playRecentRecording(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = recording.url
+                submenu.addItem(item)
+            }
+
+            submenu.addItem(NSMenuItem.separator())
+            let reveal = NSMenuItem(title: "Show in Finder", action: #selector(revealRecordingsFolder), keyEquivalent: "")
+            reveal.target = self
+            submenu.addItem(reveal)
+        }
+
+        recentRecordingsItem?.submenu = submenu
+        recentRecordingsItem?.isEnabled = !recordings.isEmpty
+    }
+
+    @objc func playRecentRecording(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        audioManager.play(url: url)
+    }
+
+    @objc func revealRecordingsFolder() {
+        NSWorkspace.shared.activateFileViewerSelecting([RecordingStore.directory])
+    }
+
+    @objc func saveLastRecording() {
+        guard let source = audioManager.currentRecordingURL
+            ?? audioManager.recentRecordings().first?.url else {
+            let alert = NSAlert()
+            alert.messageText = "Nothing to Save"
+            alert.informativeText = "Record something first, then save it from here."
+            alert.runModal()
+            return
+        }
+
+        // A save panel needs a real app to attach to, so make sure we have one.
+        let wasAccessory = NSApp.activationPolicy() == .accessory
+        if wasAccessory { NSApp.setActivationPolicy(.regular) }
+        NSApp.activate(ignoringOtherApps: true)
+
+        let panel = NSSavePanel()
+        panel.title = "Save Recording"
+        panel.allowedContentTypes = [.mpeg4Audio]
+        panel.nameFieldStringValue = "Parrot Recording.m4a"
+        panel.canCreateDirectories = true
+
+        if panel.runModal() == .OK, let destination = panel.url {
+            do {
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.copyItem(at: source, to: destination)
+                Log.audio.info("Saved recording")
+            } catch {
+                Log.audio.error("Failed to save recording: \(error.localizedDescription)")
+                let alert = NSAlert(error: error)
+                alert.runModal()
+            }
+        }
+
+        if wasAccessory && !audioManager.showDockIcon && settingsWindow == nil {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ application: NSApplication) -> Bool {
