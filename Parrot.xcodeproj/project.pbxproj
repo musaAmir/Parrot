@@ -85,7 +85,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AA00010B2EC5AF2C0000000B /* Build configuration list for PBXNativeTarget "Parrot" */;
 			buildPhases = (
-				AA0002002EC5AF2800000100 /* Reset Accessibility Permissions */,
 				AA0000FB2EC5AF280000000C /* Sources */,
 				AA0000FC2EC5AF2800000006 /* Frameworks */,
 				AA0000FD2EC5AF280000000D /* Resources */,
@@ -142,23 +141,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		AA0002002EC5AF2800000100 /* Reset Accessibility Permissions */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Reset Accessibility Permissions";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "# Reset accessibility permission for this app before build\n# This clears stale permissions so the new build can request fresh permission\ntccutil reset Accessibility com.parrot.app 2>/dev/null || true\necho \"Accessibility permissions reset for com.parrot.app\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA0000FB2EC5AF280000000C /* Sources */ = {

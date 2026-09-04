@@ -21,3 +21,6 @@ Pods/
 
 # Carthage
 Carthage/Build/
+
+# Stray data exports (may contain API keys)
+boltai-data-*.json
