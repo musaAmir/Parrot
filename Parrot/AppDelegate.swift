@@ -97,6 +97,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         setupEventTapRecovery()
         requestPermissions()
 
+        audioManager.pruneStoredRecordings()
+
         if eventTapCreationFailed {
             startPermissionMonitoring()
         }
@@ -228,6 +230,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Never leave the user's machine routed to a device we borrowed.
+        audioManager.stopPlayback()
+        audioManager.restoreDefaultDevices()
+        audioManager.pruneStoredRecordings()
+
         // Clean up all timers to prevent energy usage
         stopPermissionMonitoring()
         overlayDismissTimer?.invalidate()

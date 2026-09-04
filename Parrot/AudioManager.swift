@@ -10,9 +10,9 @@ import AppKit
 import Combine
 import CoreAudio
 
-class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
+class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRecorderDelegate {
     @Published var playbackDelay: Double = 0.5
-    @Published var selectedInputDevice: AVCaptureDevice?
+    @Published var selectedInputDeviceUID: String?
     @Published var isRecording = false
     @Published var isPlaying = false
     @Published var isPaused = false
@@ -42,12 +42,27 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var playFeedbackSounds: Bool = false
     @Published var overlayDismissDelay: Double = 5.0  // 1-20 seconds
 
+    // Recording safety net: a stuck modifier key should not record forever.
+    @Published var maxRecordingDuration: Double = 120.0  // 10-600 seconds
+    /// Keep finished recordings on disk so they can be saved from the menu bar.
+    @Published var keepRecordings: Bool = true
+
+    /// Live microphone level, 0...1, updated while recording. Drives the waveform.
+    @Published var recordingLevel: Double = 0.0
+    /// Seconds elapsed in the current recording.
+    @Published var recordingDuration: TimeInterval = 0
+
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
     private var recordedFileURL: URL?
     private var cancellables = Set<AnyCancellable>()
     private var isInitialLoad = true
     private var playbackTimer: Timer?
+    private var recordingTimer: Timer?
+
+    // System defaults to put back once we are done borrowing them
+    private var previousDefaultInputUID: String?
+    private var previousDefaultOutputUID: String?
 
     override init() {
         super.init()
@@ -58,56 +73,35 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// Persists settings shortly after any of them changes.
+    ///
+    /// This used to be four stacked `CombineLatest4`s - one of them padded with a
+    /// duplicate publisher to reach arity 4, another firing on `$isRecording`.
+    /// Merging the streams means adding a setting is a one-line change.
     private func setupAutoSave() {
-        Publishers.CombineLatest4(
-            $playbackDelay,
-            $holdModeEnabled,
-            $toggleModeEnabled,
-            $shortcutKeyCode
-        )
-        .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-        .sink { [weak self] _ in
-            guard let self = self, !self.isInitialLoad else { return }
-            self.saveSettings()
-        }
-        .store(in: &cancellables)
+        let settingsChanged: [AnyPublisher<Void, Never>] = [
+            $playbackDelay.map { _ in }.eraseToAnyPublisher(),
+            $holdModeEnabled.map { _ in }.eraseToAnyPublisher(),
+            $toggleModeEnabled.map { _ in }.eraseToAnyPublisher(),
+            $shortcutKeyCode.map { _ in }.eraseToAnyPublisher(),
+            $shortcutModifierFlags.map { _ in }.eraseToAnyPublisher(),
+            $toggleShortcutKeyCode.map { _ in }.eraseToAnyPublisher(),
+            $toggleShortcutModifierFlags.map { _ in }.eraseToAnyPublisher(),
+            $playbackVolume.map { _ in }.eraseToAnyPublisher(),
+            $selectedInputDeviceUID.map { _ in }.eraseToAnyPublisher(),
+            $selectedOutputDeviceID.map { _ in }.eraseToAnyPublisher(),
+            $showDockIcon.map { _ in }.eraseToAnyPublisher(),
+            $showMenuBarIcon.map { _ in }.eraseToAnyPublisher(),
+            $showPlaybackIndicator.map { _ in }.eraseToAnyPublisher(),
+            $playFeedbackSounds.map { _ in }.eraseToAnyPublisher(),
+            $overlayDismissDelay.map { _ in }.eraseToAnyPublisher(),
+            $maxRecordingDuration.map { _ in }.eraseToAnyPublisher(),
+            $keepRecordings.map { _ in }.eraseToAnyPublisher(),
+        ]
 
-        Publishers.CombineLatest4(
-            $shortcutModifierFlags,
-            $toggleShortcutKeyCode,
-            $toggleShortcutModifierFlags,
-            $isRecording
-        )
-        .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-        .sink { [weak self] _, _, _, isRecording in
-            guard let self = self, !self.isInitialLoad else { return }
-            if !isRecording {
-                self.saveSettings()
-            }
-        }
-        .store(in: &cancellables)
-
-        Publishers.CombineLatest4(
-            $playbackVolume,
-            $selectedOutputDeviceID,
-            $showDockIcon,
-            $showMenuBarIcon
-        )
-        .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-        .sink { [weak self] _ in
-            guard let self = self, !self.isInitialLoad else { return }
-            self.saveSettings()
-        }
-        .store(in: &cancellables)
-
-        Publishers.CombineLatest4(
-            $showPlaybackIndicator,
-            $playFeedbackSounds,
-            $overlayDismissDelay,
-            $showDockIcon  // Duplicate to trigger save
-        )
+        Publishers.MergeMany(settingsChanged)
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] in
                 guard let self = self, !self.isInitialLoad else { return }
                 self.saveSettings()
             }
@@ -145,6 +139,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if let savedOutputDeviceID = UserDefaults.standard.string(forKey: "selectedOutputDeviceID") {
             selectedOutputDeviceID = savedOutputDeviceID
         }
+        if let savedInputDeviceUID = UserDefaults.standard.string(forKey: "selectedInputDeviceUID") {
+            selectedInputDeviceUID = savedInputDeviceUID
+        }
         if let savedShowDockIcon = UserDefaults.standard.value(forKey: "showDockIcon") as? Bool {
             showDockIcon = savedShowDockIcon
         }
@@ -159,6 +156,12 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         if let savedOverlayDelay = UserDefaults.standard.value(forKey: "overlayDismissDelay") as? Double {
             overlayDismissDelay = savedOverlayDelay
+        }
+        if let savedMaxDuration = UserDefaults.standard.value(forKey: "maxRecordingDuration") as? Double {
+            maxRecordingDuration = savedMaxDuration
+        }
+        if let savedKeepRecordings = UserDefaults.standard.value(forKey: "keepRecordings") as? Bool {
+            keepRecordings = savedKeepRecordings
         }
 
         // Safety: On first launch, always show dock icon
@@ -188,23 +191,27 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         UserDefaults.standard.set(toggleShortcutKeyCode, forKey: "toggleShortcutKeyCode")
         UserDefaults.standard.set(toggleShortcutModifierFlags.rawValue, forKey: "toggleShortcutModifierFlags")
         UserDefaults.standard.set(playbackVolume, forKey: "playbackVolume")
-        if let deviceID = selectedOutputDeviceID {
-            UserDefaults.standard.set(deviceID, forKey: "selectedOutputDeviceID")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "selectedOutputDeviceID")
-        }
+        UserDefaults.standard.setOrRemove(selectedOutputDeviceID, forKey: "selectedOutputDeviceID")
+        UserDefaults.standard.setOrRemove(selectedInputDeviceUID, forKey: "selectedInputDeviceUID")
         UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
         UserDefaults.standard.set(showMenuBarIcon, forKey: "showMenuBarIcon")
         UserDefaults.standard.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
         UserDefaults.standard.set(playFeedbackSounds, forKey: "playFeedbackSounds")
         UserDefaults.standard.set(overlayDismissDelay, forKey: "overlayDismissDelay")
+        UserDefaults.standard.set(maxRecordingDuration, forKey: "maxRecordingDuration")
+        UserDefaults.standard.set(keepRecordings, forKey: "keepRecordings")
     }
+
+    // MARK: - Recording
 
     func startRecording() {
         guard !isRecording else { return }
 
-        let tempDir = FileManager.default.temporaryDirectory
-        recordedFileURL = tempDir.appendingPathComponent("recording_\(UUID().uuidString).m4a")
+        // The previous take is finished with by the time a new one starts.
+        discardCurrentRecording()
+        applyDefaultDevices(input: true, output: false)
+
+        let url = RecordingStore.newRecordingURL()
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -214,13 +221,26 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         ]
 
         do {
-            audioRecorder = try AVAudioRecorder(url: recordedFileURL!, settings: settings)
-            audioRecorder?.record()
+            let recorder = try AVAudioRecorder(url: url, settings: settings)
+            recorder.isMeteringEnabled = true
+            guard recorder.record(forDuration: maxRecordingDuration) else {
+                Log.audio.error("AVAudioRecorder refused to start")
+                restoreDefaultDevices()
+                return
+            }
+            recorder.delegate = self
+
+            audioRecorder = recorder
+            recordedFileURL = url
+            recordingDuration = 0
+            recordingLevel = 0
             isRecording = true
-            print("Recording started")
+            startRecordingTimer()
             playStartSound()
+            Log.audio.info("Recording started")
         } catch {
-            print("Failed to start recording: \(error)")
+            Log.audio.error("Failed to start recording: \(error.localizedDescription)")
+            restoreDefaultDevices()
         }
     }
 
@@ -228,45 +248,89 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard isRecording else { return }
 
         audioRecorder?.stop()
+        stopRecordingTimer()
         isRecording = false
-        print("Recording stopped")
+        restoreDefaultDevices()
         playStopSound()
+        Log.audio.info("Recording stopped after \(self.recordingDuration, format: .fixed(precision: 1))s")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + playbackDelay) { [weak self] in
             self?.playRecording()
         }
     }
 
+    /// Samples the microphone level so the indicator can show what is actually
+    /// being picked up, rather than the canned sine wave it used to animate.
+    private func startRecordingTimer() {
+        recordingTimer?.invalidate()
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self = self, let recorder = self.audioRecorder, recorder.isRecording else { return }
+            recorder.updateMeters()
+            self.recordingLevel = Self.normalizedLevel(fromDecibels: recorder.averagePower(forChannel: 0))
+            self.recordingDuration = recorder.currentTime
+        }
+    }
+
+    private func stopRecordingTimer() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        recordingLevel = 0
+    }
+
+    /// Maps AVAudioRecorder's dBFS reading (roughly -160...0) onto 0...1.
+    ///
+    /// The floor is -50 dB rather than -160 because normal speech sits between
+    /// about -30 and -5 dB; using the full range leaves the meter barely moving.
+    static func normalizedLevel(fromDecibels decibels: Float) -> Double {
+        let floor: Float = -50
+        guard decibels.isFinite else { return 0 }
+        let clamped = max(floor, min(0, decibels))
+        return Double((clamped - floor) / -floor)
+    }
+
+    // MARK: - AVAudioRecorderDelegate
+
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.isRecording else { return }
+            // Only reached when `record(forDuration:)` hit the cap.
+            Log.audio.notice("Recording hit the maximum duration and stopped automatically")
+            self.stopRecordingTimer()
+            self.isRecording = false
+            self.restoreDefaultDevices()
+            self.playStopSound()
+            DispatchQueue.main.asyncAfter(deadline: .now() + self.playbackDelay) { [weak self] in
+                self?.playRecording()
+            }
+        }
+    }
+
+    // MARK: - Playback
+
     func playRecording() {
         guard let url = recordedFileURL else {
-            print("No recording found")
+            Log.audio.error("No recording to play")
             return
         }
 
-        do {
-            if let deviceID = selectedOutputDeviceID {
-                setOutputDevice(deviceID: deviceID)
-            }
+        applyDefaultDevices(input: false, output: true)
 
-            audioPlayer = try AVAudioPlayer(contentsOf: url)
-            audioPlayer?.delegate = self
-            audioPlayer?.volume = Float(playbackVolume)
-            audioPlayer?.isMeteringEnabled = true
-            audioPlayer?.play()
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.volume = Float(playbackVolume)
+            player.prepareToPlay()
+            player.play()
+
+            audioPlayer = player
             isPlaying = true
             isPaused = false
             hasSoundStarted = false
             playbackProgress = 0.0
-            print("Playing recording at volume: \(playbackVolume)")
-
             startPlaybackTimer()
-
-            // Remove the auto-stop timer since we now have manual controls
-            // But we still need to stop when it finishes naturally
-            // We'll handle that in the timer or delegate
-
         } catch {
-            print("Failed to play recording: \(error)")
+            Log.audio.error("Failed to play recording: \(error.localizedDescription)")
+            restoreDefaultDevices()
         }
     }
 
@@ -302,7 +366,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         isPlaying = false
         isPaused = false
         playbackProgress = 1.0
-        // Don't cleanup yet - allow replay
+        restoreDefaultDevices()
+        // The file stays put so the overlay can replay it, and so it can be saved.
     }
 
     func togglePlayback() {
@@ -347,172 +412,89 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         hasSoundStarted = false
         playbackProgress = 0.0
         audioPlayer?.stop()
-        cleanupRecording()
+        audioPlayer = nil
+        restoreDefaultDevices()
     }
 
-    func cleanupRecording() {
+    // MARK: - Recording files
+
+    /// URL of the take currently loaded, if there is one on disk.
+    var currentRecordingURL: URL? {
+        guard let url = recordedFileURL, FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    /// Releases the current take, deleting the file unless the user asked to keep
+    /// recordings around. Nothing used to call this, so every recording ever made
+    /// stayed in the temp directory forever.
+    func discardCurrentRecording() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPlaying = false
+        isPaused = false
+        playbackProgress = 0
+
         guard let url = recordedFileURL else { return }
-        try? FileManager.default.removeItem(at: url)
         recordedFileURL = nil
+        if !keepRecordings {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
-    func getAvailableInputDevices() -> [AVCaptureDevice] {
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.microphone, .external],
-            mediaType: .audio,
-            position: .unspecified
-        )
-        return discoverySession.devices
+    /// Deletes anything left behind by a previous run, and trims the kept
+    /// recordings back to the retention limit.
+    func pruneStoredRecordings() {
+        RecordingStore.prune(keeping: keepRecordings ? RecordingStore.retentionLimit : 0,
+                            excluding: recordedFileURL)
     }
 
-    // MARK: - Audio Output Device Management
-
-    struct AudioOutputDevice: Identifiable, Hashable {
-        let id: String
-        let name: String
-        let uid: String
+    func recentRecordings() -> [Recording] {
+        RecordingStore.recentRecordings()
     }
 
-    func getAvailableOutputDevices() -> [AudioOutputDevice] {
-        var devices: [AudioOutputDevice] = []
+    func getAvailableInputDevices() -> [AudioDevice] {
+        AudioDevices.devices(for: .input)
+    }
 
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
+    func getAvailableOutputDevices() -> [AudioDevice] {
+        AudioDevices.devices(for: .output)
+    }
 
-        var dataSize: UInt32 = 0
-        let status = AudioObjectGetPropertyDataSize(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            0,
-            nil,
-            &dataSize
-        )
+    // MARK: - Device routing
 
-        guard status == kAudioHardwareNoError else { return devices }
-
-        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
-        var audioDevices = [AudioDeviceID](repeating: 0, count: deviceCount)
-
-        let getDevicesStatus = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            0,
-            nil,
-            &dataSize,
-            &audioDevices
-        )
-
-        guard getDevicesStatus == kAudioHardwareNoError else { return devices }
-
-        for deviceID in audioDevices {
-            var streamPropertyAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyStreams,
-                mScope: kAudioDevicePropertyScopeOutput,
-                mElement: kAudioObjectPropertyElementMain
-            )
-
-            var streamDataSize: UInt32 = 0
-            AudioObjectGetPropertyDataSize(deviceID, &streamPropertyAddress, 0, nil, &streamDataSize)
-
-            if streamDataSize > 0 {
-                if let name = getDeviceName(deviceID: deviceID),
-                   let uid = getDeviceUID(deviceID: deviceID) {
-                    devices.append(AudioOutputDevice(id: uid, name: name, uid: uid))
-                }
+    /// Applies the user's device choices by moving the system defaults, having
+    /// first recorded what they were.
+    ///
+    /// AVAudioRecorder and AVAudioPlayer both follow the system default and give
+    /// us no way to target a device directly, so this is the only lever available.
+    /// Every caller must pair it with `restoreDefaultDevices()`; previously the
+    /// output device was changed and never put back, which left the user's whole
+    /// machine routed to whatever Parrot last used.
+    private func applyDefaultDevices(input: Bool, output: Bool) {
+        if input, let uid = selectedInputDeviceUID {
+            previousDefaultInputUID = AudioDevices.defaultDeviceUID(for: .input)
+            if !AudioDevices.setDefaultDevice(uid: uid, for: .input) {
+                previousDefaultInputUID = nil
             }
         }
-
-        return devices
-    }
-
-    private func getDeviceName(deviceID: AudioDeviceID) -> String? {
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceNameCFString,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        var dataSize = UInt32(MemoryLayout<CFString>.size)
-        var deviceName: CFString = "" as CFString
-
-        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &deviceName)
-        guard status == kAudioHardwareNoError else { return nil }
-
-        return deviceName as String
-    }
-
-    private func getDeviceUID(deviceID: AudioDeviceID) -> String? {
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceUID,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        var dataSize = UInt32(MemoryLayout<CFString>.size)
-        var deviceUID: CFString = "" as CFString
-
-        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &deviceUID)
-        guard status == kAudioHardwareNoError else { return nil }
-
-        return deviceUID as String
-    }
-
-    private func setOutputDevice(deviceID: String) {
-        guard let audioDeviceID = getAudioDeviceID(byUID: deviceID) else {
-            print("Could not find audio device with UID: \(deviceID)")
-            return
-        }
-
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        var deviceIDToSet = audioDeviceID
-        let dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
-
-        let status = AudioObjectSetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            0,
-            nil,
-            dataSize,
-            &deviceIDToSet
-        )
-
-        if status == kAudioHardwareNoError {
-            print("Successfully set output device to: \(deviceID)")
-        } else {
-            print("Failed to set output device. Status: \(status)")
-        }
-    }
-
-    private func getAudioDeviceID(byUID uid: String) -> AudioDeviceID? {
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        var dataSize: UInt32 = 0
-        AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize)
-
-        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
-        var audioDevices = [AudioDeviceID](repeating: 0, count: deviceCount)
-
-        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize, &audioDevices)
-
-        for deviceID in audioDevices {
-            if let deviceUID = getDeviceUID(deviceID: deviceID), deviceUID == uid {
-                return deviceID
+        if output, let uid = selectedOutputDeviceID {
+            previousDefaultOutputUID = AudioDevices.defaultDeviceUID(for: .output)
+            if !AudioDevices.setDefaultDevice(uid: uid, for: .output) {
+                previousDefaultOutputUID = nil
             }
         }
+    }
 
-        return nil
+    /// Puts the system defaults back the way we found them.
+    func restoreDefaultDevices() {
+        if let uid = previousDefaultInputUID {
+            AudioDevices.setDefaultDevice(uid: uid, for: .input)
+            previousDefaultInputUID = nil
+        }
+        if let uid = previousDefaultOutputUID {
+            AudioDevices.setDefaultDevice(uid: uid, for: .output)
+            previousDefaultOutputUID = nil
+        }
     }
 
     private func playStartSound() {

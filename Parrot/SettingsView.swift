@@ -31,8 +31,8 @@ struct SettingsView: View {
     @ObservedObject var permissionManager: PermissionManager
     var onClose: () -> Void
     @State private var selectedTab: SettingsTab = .general
-    @State private var inputDevices: [AVCaptureDevice] = []
-    @State private var outputDevices: [AudioManager.AudioOutputDevice] = []
+    @State private var inputDevices: [AudioDevice] = []
+    @State private var outputDevices: [AudioDevice] = []
 
     var body: some View {
         NavigationSplitView {
@@ -325,8 +325,8 @@ struct ShortcutsSettingsTab: View {
 
 struct AudioSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
-    @Binding var inputDevices: [AVCaptureDevice]
-    @Binding var outputDevices: [AudioManager.AudioOutputDevice]
+    @Binding var inputDevices: [AudioDevice]
+    @Binding var outputDevices: [AudioDevice]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -334,13 +334,8 @@ struct AudioSettingsTab: View {
                 ModernRow(showDivider: false) {
                     HStack {
                         DevicePicker(
-                            selection: Binding(
-                                get: { audioManager.selectedInputDevice?.uniqueID },
-                                set: { newID in
-                                    audioManager.selectedInputDevice = inputDevices.first { $0.uniqueID == newID }
-                                }
-                            ),
-                            options: [("default", "System Default")] + inputDevices.map { ($0.uniqueID, $0.localizedName) }
+                            selection: $audioManager.selectedInputDeviceUID,
+                            options: [("default", "System Default")] + inputDevices.map { ($0.uid, $0.name) }
                         )
                         Spacer()
                     }
