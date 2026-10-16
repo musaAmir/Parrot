@@ -6,7 +6,8 @@ on:
     paths:
       - 'docs/index.html'
       - 'docs/styles.css'
-      - 'docs/app.js'
+      - 'docs/*.js'
+      - 'Tests/Website/**'
       - 'docs/assets/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -35,7 +36,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Check website JavaScript
-        run: node --check docs/app.js
+        run: |
+          node --input-type=module --check < docs/app.js
+          node --input-type=module --check < docs/voice-demo.js
+          node --test Tests/Website/*.test.mjs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload website
