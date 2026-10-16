@@ -9,11 +9,12 @@ import Cocoa
 import SwiftUI
 
 class RecordingIndicatorWindow: NSWindow {
-    private var initialLocation: NSPoint = .zero
+    private let audioManager: AudioManager
     weak var appDelegate: AppDelegate?
 
     init(audioManager: AudioManager, appDelegate: AppDelegate? = nil) {
         self.appDelegate = appDelegate
+        self.audioManager = audioManager
         let screenFrame = NSScreen.main?.frame ?? NSRect.zero
         let windowWidth: CGFloat = 220
         let windowHeight: CGFloat = 50
@@ -39,9 +40,6 @@ class RecordingIndicatorWindow: NSWindow {
         self.backgroundColor = .clear
         self.isMovableByWindowBackground = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary]
-
-        let hostingView = NSHostingView(rootView: RecordingIndicatorView(audioManager: audioManager))
-        self.contentView = hostingView
 
         self.orderOut(nil)
     }
@@ -93,6 +91,9 @@ class RecordingIndicatorWindow: NSWindow {
     }
 
     func show() {
+        if !(contentView is NSHostingView<RecordingIndicatorView>) {
+            contentView = NSHostingView(rootView: RecordingIndicatorView(audioManager: audioManager))
+        }
         self.alphaValue = 0
         self.orderFront(nil)
 
@@ -107,7 +108,9 @@ class RecordingIndicatorWindow: NSWindow {
             context.duration = 0.2
             self.animator().alphaValue = 0.0
         }, completionHandler: {
+            guard !self.audioManager.isRecording else { return }
             self.orderOut(nil)
+            self.contentView = nil
         })
     }
 }

@@ -29,6 +29,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @ObservedObject var audioManager: AudioManager
     @ObservedObject var permissionManager: PermissionManager
+    @ObservedObject var updates: UpdateController
     var onClose: () -> Void
     @State private var selectedTab: SettingsTab = .general
     @State private var inputDevices: [AudioDevice] = []
@@ -45,9 +46,14 @@ struct SettingsView: View {
         } detail: {
             ScrollView {
                 VStack(spacing: 20) {
+                    if let error = audioManager.lastError {
+                        Text(error).font(.callout).foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Audio error: \(error)")
+                    }
                     switch selectedTab {
                     case .general:
-                        GeneralSettingsTab(audioManager: audioManager)
+                        GeneralSettingsTab(audioManager: audioManager, updates: updates)
                     case .shortcuts:
                         ShortcutsSettingsTab(audioManager: audioManager)
                     case .audio:
@@ -141,6 +147,7 @@ struct ModernRow<Content: View>: View {
 
 struct GeneralSettingsTab: View {
     @ObservedObject var audioManager: AudioManager
+    @ObservedObject var updates: UpdateController
 
     private let labelWidth: CGFloat = 100
     private let sliderWidth: CGFloat = 150
@@ -153,6 +160,25 @@ struct GeneralSettingsTab: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            ModernSection(header: "Updates") {
+                ModernRow {
+                    Button("Check for Updates…", action: updates.checkForUpdates)
+                        .disabled(!updates.canCheckForUpdates)
+                    Spacer()
+                }
+                ModernRow(showDivider: false) {
+                    Toggle("Check automatically", isOn: Binding(
+                        get: { updates.automaticallyChecksForUpdates },
+                        set: updates.setAutomaticallyChecksForUpdates
+                    ))
+                    .toggleStyle(.checkbox)
+                    Spacer()
+                }
+            }
+            if let error = updates.startupError {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+            }
+
             ModernSection(header: "Playback") {
                 ModernRow {
                     HStack(spacing: 12) {

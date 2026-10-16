@@ -14,27 +14,11 @@ import ServiceManagement
 import UniformTypeIdentifiers
 import os
 
-/// A key binding in the form the event tap needs it, with `CGEventFlags` already
-/// resolved so the tap callback never has to translate `NSEvent.ModifierFlags`.
-struct KeyBinding: Equatable {
-    var keyCode: UInt16
-    var flags: CGEventFlags
-    var isEnabled: Bool
-
-    func matches(keyCode: UInt16, flags: CGEventFlags) -> Bool {
-        isEnabled && keyCode == self.keyCode && flags == self.flags
-    }
-
-    static let disabled = KeyBinding(keyCode: 0, flags: [], isEnabled: false)
-}
-
 /// Thread-safe snapshot of the current shortcuts.
 ///
-/// The event tap callback runs on its own thread for every keystroke on the
-/// system. Reading `@Published` properties off `AudioManager` from there is a
-/// data race, and any delay there makes macOS disable the tap outright, so the
-/// bindings are copied into this box whenever settings change and the callback
-/// only ever reads the copy.
+/// The event tap is attached to the main run loop. Keep its per-keystroke work
+/// small: copy settings only when bindings change, then read a stable snapshot
+/// in the callback before dispatching audio work.
 final class ShortcutSnapshot: @unchecked Sendable {
     private var lock = os_unfair_lock()
     private var hold: KeyBinding = .disabled
@@ -54,7 +38,9 @@ final class ShortcutSnapshot: @unchecked Sendable {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
+@MainActor class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
+    let updates = UpdateController()
+    private var shortcutPresses = ShortcutPressTracker()
     var statusItem: NSStatusItem?
     var audioManager: AudioManager!
     var permissionManager: PermissionManager!
@@ -84,6 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     func applicationDidFinishLaunching(_ notification: Notification) {
         audioManager = AudioManager()
         permissionManager = PermissionManager()
+        updates.start()
 
         // Apply appearance settings
         applyDockIconSetting()
@@ -162,10 +149,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
         overlayDismissTimer?.invalidate()
         overlayDismissTimer = Timer.scheduledTimer(withTimeInterval: audioManager.overlayDismissDelay, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            self.playbackIndicatorWindow?.hide()
-            self.playbackOverlayShown = false
-            self.overlayDismissTimer = nil
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                self.playbackIndicatorWindow?.hide()
+                self.playbackOverlayShown = false
+                self.overlayDismissTimer = nil
+            }
         }
     }
 
@@ -228,6 +217,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         updateLaunchAtLoginState()
         menu.addItem(launchAtLoginItem!)
 
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+        let automaticItem = NSMenuItem(title: "Check for Updates Automatically", action: #selector(toggleAutomaticUpdates), keyEquivalent: "")
+        automaticItem.target = self
+        menu.addItem(automaticItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
@@ -245,9 +241,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         guard menu == statusItem?.menu else { return }
 
         updateLaunchAtLoginState()
+        menu.items.first(where: { $0.action == #selector(checkForUpdates) })?.isEnabled = updates.canCheckForUpdates
+        menu.items.first(where: { $0.action == #selector(toggleAutomaticUpdates) })?.state = updates.automaticallyChecksForUpdates ? .on : .off
 
         let submenu = NSMenu()
-        let recordings = audioManager.recentRecordings()
+        let recordings = audioManager.recentRecordings().filter { $0.url != audioManager.currentRecordingURL || !audioManager.isRecording }
 
         if recordings.isEmpty {
             let empty = NSMenuItem(title: "No recordings yet", action: nil, keyEquivalent: "")
@@ -311,10 +309,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
         if panel.runModal() == .OK, let destination = panel.url {
             do {
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
+                if source.standardizedFileURL != destination.standardizedFileURL {
+                    try Data(contentsOf: source, options: .mappedIfSafe).write(to: destination, options: .atomic)
                 }
-                try FileManager.default.copyItem(at: source, to: destination)
                 Log.audio.info("Saved recording")
             } catch {
                 Log.audio.error("Failed to save recording: \(error.localizedDescription)")
@@ -340,8 +337,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
     func applicationWillTerminate(_ notification: Notification) {
         // Never leave the user's machine routed to a device we borrowed.
+        audioManager.cancelRecording()
         audioManager.stopPlayback()
-        audioManager.restoreDefaultDevices()
+        audioManager.saveSettings()
+        if let eventTap { CFMachPortInvalidate(eventTap) }
+        if let eventTapRunLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), eventTapRunLoopSource, .commonModes) }
         audioManager.pruneStoredRecordings()
 
         // Clean up all timers to prevent energy usage
@@ -360,7 +360,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         // which made the app impossible to live with; the Permissions tab now
         // carries that state instead.
         if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 DispatchQueue.main.async { [weak self] in
                     self?.permissionManager.microphoneStatus = granted ? .granted : .denied
                     if !granted {
@@ -386,6 +386,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     }
 
     func setupGlobalKeyboardShortcut() {
+        guard eventTap == nil else { reenableEventTapIfNeeded(); return }
         let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << CGEventType.keyUp.rawValue)
 
@@ -396,7 +397,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
             eventsOfInterest: eventMask,
             callback: { proxy, type, event, refcon in
                 let appDelegate = Unmanaged<AppDelegate>.fromOpaque(refcon!).takeUnretainedValue()
-                return appDelegate.handleGlobalKeyEvent(proxy: proxy, type: type, event: event)
+                return MainActor.assumeIsolated {
+                    appDelegate.handleGlobalKeyEvent(proxy: proxy, type: type, event: event)
+                }
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
@@ -407,7 +410,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
         eventTap = tap
         eventTapRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), eventTapRunLoopSource, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), eventTapRunLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         eventTapCreationFailed = false
 
@@ -434,11 +437,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     func setupEventTapRecovery() {
         // Taps commonly die across sleep/wake and fast user switching.
         let workspaceCenter = NSWorkspace.shared.notificationCenter
+        workspaceCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.shortcutPresses.reset()
+                self?.toggleShortcutHoldTimer?.invalidate()
+                self?.audioManager.cancelRecording()
+                self?.audioManager.stopPlayback()
+            }
+        }
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
             workspaceCenter.addObserver(
                 forName: name, object: nil, queue: .main
             ) { [weak self] _ in
-                self?.reenableEventTapIfNeeded()
+                MainActor.assumeIsolated {
+                    self?.reenableEventTapIfNeeded()
+                }
             }
         }
     }
@@ -471,7 +484,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
     func setupShortcutObservers() {
         publishShortcutSnapshot()
-        audioManager.objectWillChange
+        Publishers.MergeMany([
+            audioManager.$shortcutKeyCode.map { _ in }.eraseToAnyPublisher(),
+            audioManager.$shortcutModifierFlags.map { _ in }.eraseToAnyPublisher(),
+            audioManager.$toggleShortcutKeyCode.map { _ in }.eraseToAnyPublisher(),
+            audioManager.$toggleShortcutModifierFlags.map { _ in }.eraseToAnyPublisher(),
+            audioManager.$holdModeEnabled.map { _ in }.eraseToAnyPublisher(),
+            audioManager.$toggleModeEnabled.map { _ in }.eraseToAnyPublisher()
+        ])
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.publishShortcutSnapshot() }
             .store(in: &cancellables)
@@ -498,33 +518,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
         let (hold, toggle) = shortcutSnapshot.read()
 
-        if hold.matches(keyCode: keyCode, flags: flags) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                if type == .keyDown && !isRepeat {
-                    self.audioManager.startRecording()
-                } else if type == .keyUp {
-                    self.audioManager.stopRecordingAndPlayback()
-                }
-            }
-            return nil
+        // Let the focused shortcut field capture keys without starting audio.
+        if let field = NSApp.keyWindow?.firstResponder as? ShortcutRecorderView, field.isRecording {
+            return Unmanaged.passUnretained(event)
         }
-
-        if toggle.matches(keyCode: keyCode, flags: flags) {
-            if type == .keyDown && !isRepeat {
-                DispatchQueue.main.async { [weak self] in
-                    self?.beginToggleShortcutPress()
-                }
-                return nil
-            } else if type == .keyUp {
-                DispatchQueue.main.async { [weak self] in
-                    self?.endToggleShortcutPress()
-                }
-                return nil
+        guard let action = shortcutPresses.handle(keyCode: keyCode, flags: flags,
+            isDown: type == .keyDown, isRepeat: isRepeat, hold: hold, toggle: toggle) else {
+            return Unmanaged.passUnretained(event)
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            switch action {
+            case .holdDown: self.audioManager.startRecording()
+            case .holdUp: self.audioManager.stopRecordingAndPlayback()
+            case .toggleDown: self.beginToggleShortcutPress()
+            case .toggleUp: self.endToggleShortcutPress()
+            case .consume: break
             }
         }
-
-        return Unmanaged.passUnretained(event)
+        return nil
     }
 
     // MARK: - Toggle shortcut press handling
@@ -542,10 +554,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         toggleShortcutHoldTimer = Timer.scheduledTimer(
             withTimeInterval: Self.toggleHoldThreshold, repeats: false
         ) { [weak self] _ in
-            guard let self = self else { return }
-            Log.shortcuts.debug("Toggle shortcut held past threshold - switching to hold mode")
-            self.toggleShortcutIsInHoldMode = true
-            self.audioManager.startRecording()
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                Log.shortcuts.debug("Toggle shortcut held past threshold - switching to hold mode")
+                self.toggleShortcutIsInHoldMode = true
+                self.audioManager.startRecording()
+            }
         }
     }
 
@@ -575,6 +589,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
             let settingsView = SettingsView(
                 audioManager: audioManager,
                 permissionManager: permissionManager,
+                updates: updates,
                 onClose: { [weak self] in
                     self?.closeSettingsWindow()
                 }
@@ -617,6 +632,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         }
     }
 
+    @objc func checkForUpdates() { updates.checkForUpdates() }
+
+    @objc func toggleAutomaticUpdates() {
+        updates.setAutomaticallyChecksForUpdates(!updates.automaticallyChecksForUpdates)
+    }
+
     @objc func quit() {
         NSApplication.shared.terminate(nil)
     }
@@ -636,7 +657,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     }
 
     func updateLaunchAtLoginState() {
-        let isEnabled = SMAppService.mainApp.status == .enabled
+        let isEnabled = SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval
         launchAtLoginItem?.state = isEnabled ? .on : .off
     }
 
@@ -652,7 +673,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
 
         // Check every 3 seconds instead of every 1 second to reduce energy usage
         permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.checkAccessibilityPermissionAndRestart()
+            MainActor.assumeIsolated {
+                self?.checkAccessibilityPermissionAndRestart()
+            }
         }
     }
 

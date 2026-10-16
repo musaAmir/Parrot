@@ -1,49 +1,21 @@
 # Parrot
 
-A macOS menubar app for instant audio recording and playback with global keyboard shortcuts.
+Record your voice with a shortcut. Release to hear it back.
 
-## Features
+[Download](https://github.com/musaAmir/Parrot/releases/latest) · [Website](https://musaamir.github.io/Parrot/)
 
-- **Hold to Record** - Hold a shortcut key to record, release to play back
-- **Toggle to Record** - Tap to start/stop recording with automatic playback
-- **Global Shortcuts** - Works system-wide, even when the app is in the background
-- **Live Level Meter** - The recording indicator shows your actual microphone input
-- **Auto-Stop** - Recordings end at a configurable limit so a stuck key can't run away
-- **Save Your Takes** - The 10 most recent recordings stay in the menu bar, ready to replay or save
-- **Configurable Audio** - Pick input and output devices; Parrot restores your system defaults afterwards
-
-## Requirements
-
-- macOS 14.0 or later
-- Microphone permission
-- Accessibility permission (for global keyboard shortcuts)
+Free and open source. macOS 14+. Apple silicon and Intel.
 
 ## Install
 
-1. Download the latest release from [Releases](../../releases)
-2. Move `Parrot.app` to your Applications folder
-3. Launch Parrot and grant the required permissions
+Unzip the download, move **Parrot.app** to **Applications**, and open it. Grant microphone and Accessibility permissions to use global recording shortcuts.
 
-### Build from Source
+Hold **⌘⇧Z** to record; release to play back. Change shortcuts, playback delay, and recording retention in Settings.
 
-```bash
-git clone https://github.com/yourusername/Parrot.git
-cd Parrot
-open Parrot.xcodeproj
-```
+Version 1.2.0 is not notarized by Apple; macOS may block first launch. Older versions need one manual download to gain automatic update checks.
 
-Build and run with Xcode (Cmd+R).
+## Build
 
-## Usage
+Open `Parrot.xcodeproj` in Xcode, or run `./build.sh`. Run checks with `swift test`.
 
-1. Click the Parrot icon in the menubar to access Settings
-2. Configure your preferred keyboard shortcuts
-3. Use the shortcuts anywhere to record and play back audio
-
-Recordings are stored in `~/Library/Application Support/Parrot/Recordings` and
-pruned to the 10 most recent. Turn off **Keep Recent Recordings** in Settings to
-have each take deleted as soon as the next one starts.
-
-## License
-
-MIT
+[Release guide](docs/updates.md) · [Website guide](docs/website.md) · [MIT license](LICENSE)

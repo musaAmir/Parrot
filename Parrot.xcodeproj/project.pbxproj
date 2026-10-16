@@ -20,6 +20,11 @@
 		AA0001162EC5AF2C00000030 /* RecordingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001172EC5AF2C00000031 /* RecordingIndicatorWindow.swift */; };
 		AA0001182EC5AF2C00000032 /* PlaybackIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001192EC5AF2C00000033 /* PlaybackIndicatorWindow.swift */; };
 		AA00011A2EC5AF2C00000034 /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00011B2EC5AF2C00000035 /* ShortcutRecorder.swift */; };
+		BB0000000000000000000101 /* PlaybackScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* PlaybackScheduler.swift */; };
+		BB0000000000000000000102 /* ShortcutPressTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ShortcutPressTracker.swift */; };
+		BB0000000000000000000103 /* UpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* UpdateController.swift */; };
+		BB0000000000000000000104 /* UpdateConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* UpdateConfiguration.swift */; };
+		BB0000000000000000000201 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000202 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +44,10 @@
 		AA0001172EC5AF2C00000031 /* RecordingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicatorWindow.swift; sourceTree = "<group>"; };
 		AA0001192EC5AF2C00000033 /* PlaybackIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackIndicatorWindow.swift; sourceTree = "<group>"; };
 		AA00011B2EC5AF2C00000035 /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
+		BB0000000000000000000001 /* PlaybackScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackScheduler.swift; sourceTree = "<group>"; };
+		BB0000000000000000000002 /* ShortcutPressTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutPressTracker.swift; sourceTree = "<group>"; };
+		BB0000000000000000000003 /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
+		BB0000000000000000000004 /* UpdateConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +55,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                BB0000000000000000000201 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +81,10 @@
 		AA0001082EC5AF2800000008 /* Parrot */ = {
 			isa = PBXGroup;
 			children = (
+				BB0000000000000000000001 /* PlaybackScheduler.swift */,
+				BB0000000000000000000002 /* ShortcutPressTracker.swift */,
+				BB0000000000000000000003 /* UpdateController.swift */,
+				BB0000000000000000000004 /* UpdateConfiguration.swift */,
 				AA0001002EC5AF2800000001 /* ParrotApp.swift */,
 				AA190111A7C5D06BFF165F7F /* KeyCodeFormatter.swift */,
 				AA51CEF66AF9E10731BA5214 /* RecordingStore.swift */,
@@ -106,6 +120,7 @@
 			dependencies = (
 			);
 			name = Parrot;
+			packageProductDependencies = (BB0000000000000000000202 /* Sparkle */,);
 			productName = Parrot;
 			productReference = AA0000FF2EC5AF2800000000 /* Parrot.app */;
 			productType = "com.apple.product-type.application";
@@ -135,6 +150,7 @@
 			);
 			mainGroup = AA0000F62EC5AF2800000007;
 			productRefGroup = AA0001002EC5AF2800000009 /* Products */;
+			packageReferences = (BB0000000000000000000203 /* Sparkle */,);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -159,6 +175,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB0000000000000000000101 /* PlaybackScheduler.swift in Sources */,
+				BB0000000000000000000102 /* ShortcutPressTracker.swift in Sources */,
+				BB0000000000000000000103 /* UpdateController.swift in Sources */,
+				BB0000000000000000000104 /* UpdateConfiguration.swift in Sources */,
 				AA0001012EC5AF2800000001 /* ParrotApp.swift in Sources */,
 				AA336E01C3CEDAD28922AF77 /* KeyCodeFormatter.swift in Sources */,
 				AAA630D3F1DB0A632871FB31 /* RecordingStore.swift in Sources */,
@@ -175,6 +195,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+        BB0000000000000000000203 /* Sparkle */ = {
+            isa = XCRemoteSwiftPackageReference;
+            repositoryURL = "https://github.com/sparkle-project/Sparkle";
+            requirement = { kind = exactVersion; version = 2.10.0; };
+        };
+/* End XCRemoteSwiftPackageReference section */
+/* Begin XCSwiftPackageProductDependency section */
+        BB0000000000000000000202 /* Sparkle */ = {
+            isa = XCSwiftPackageProductDependency;
+            package = BB0000000000000000000203 /* Sparkle */;
+            productName = Sparkle;
+        };
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA0001092EC5AF2C00000010 /* Debug */ = {
@@ -301,7 +336,7 @@
 				CODE_SIGN_ENTITLEMENTS = Parrot/Parrot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -313,7 +348,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parrot.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -329,7 +364,7 @@
 				CODE_SIGN_ENTITLEMENTS = Parrot/Parrot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -341,7 +376,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parrot.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

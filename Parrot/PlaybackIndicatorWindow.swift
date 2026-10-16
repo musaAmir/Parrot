@@ -78,6 +78,7 @@ class PlaybackIndicatorWindow: NSWindow {
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             self.animator().alphaValue = 0.0
         }, completionHandler: {
+            guard self.audioManager?.isPlaying != true else { return }
             self.orderOut(nil)
         })
     }

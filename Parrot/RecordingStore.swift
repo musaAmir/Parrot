@@ -42,13 +42,13 @@ enum RecordingStore {
         return directory
     }
 
-    static func newRecordingURL() -> URL {
+    static func newRecordingURL(in folder: URL = RecordingStore.directory) -> URL {
         let stamp = ISO8601DateFormatter.filenameFormatter.string(from: Date())
-        return directory.appendingPathComponent("\(filePrefix)\(stamp).\(fileExtension)")
+        return folder.appendingPathComponent("\(filePrefix)\(stamp)_\(UUID().uuidString).\(fileExtension)")
     }
 
-    static func recentRecordings() -> [Recording] {
-        storedFiles()
+    static func recentRecordings(in folder: URL = RecordingStore.directory) -> [Recording] {
+        storedFiles(in: folder)
             .prefix(retentionLimit)
             .map { url, created in
                 Recording(url: url, createdAt: created, duration: duration(of: url))
@@ -59,23 +59,26 @@ enum RecordingStore {
     ///
     /// Also sweeps up the temp-directory files left by versions of Parrot that
     /// recorded into `NSTemporaryDirectory()` and never deleted anything.
-    static func prune(keeping limit: Int, excluding inUse: URL?) {
-        let files = storedFiles().map(\.url)
-        for url in files.dropFirst(limit) where url != inUse {
+    static func prune(keeping limit: Int, excluding inUse: URL?, in folder: URL = RecordingStore.directory) {
+        let files = storedFiles(in: folder).map(\.url)
+        let activePath = inUse?.resolvingSymlinksInPath().path
+        let reserved = files.contains { $0.resolvingSymlinksInPath().path == activePath } ? 1 : 0
+        let finished = files.filter { $0.resolvingSymlinksInPath().path != activePath }
+        for url in finished.dropFirst(max(0, limit - reserved)) {
             try? FileManager.default.removeItem(at: url)
         }
-        removeLegacyTemporaryRecordings()
+        if folder == directory { removeLegacyTemporaryRecordings() }
     }
 
-    private static func storedFiles() -> [(url: URL, created: Date)] {
+    private static func storedFiles(in folder: URL) -> [(url: URL, created: Date)] {
         let contents = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
+            at: folder,
             includingPropertiesForKeys: [.creationDateKey],
             options: [.skipsHiddenFiles]
         )) ?? []
 
         return contents
-            .filter { $0.pathExtension == fileExtension }
+            .filter { $0.pathExtension == fileExtension && $0.lastPathComponent.hasPrefix(filePrefix) }
             .map { url in
                 let created = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
                 return (url, created)
