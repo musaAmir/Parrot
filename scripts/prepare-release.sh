@@ -1,15 +1,15 @@
 #!/bin/bash
-# Build and sign a release. Notarization is required unless --adhoc is explicit.
+# Build and sign a release. Non-notarized modes must be selected explicitly.
 set -euo pipefail
 source "$(dirname "$0")/sparkle-tools.sh"
 cd "$PARROT_ROOT"
 SIGNING_MODE=notarized
-if [[ "${1:-}" == --adhoc ]]; then
-  SIGNING_MODE=ad-hoc
-  shift
-fi
+case "${1:-}" in
+  --adhoc) SIGNING_MODE=ad-hoc; shift ;;
+  --development) SIGNING_MODE=development; shift ;;
+esac
 if [[ $# != 3 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$2" =~ ^[1-9][0-9]*$ || ! -f "$3" ]]; then
-  echo "Usage: $0 [--adhoc] VERSION BUILD_NUMBER RELEASE_NOTES.md" >&2
+  echo "Usage: $0 [--adhoc|--development] VERSION BUILD_NUMBER RELEASE_NOTES.md" >&2
   exit 2
 fi
 VERSION="$1"
@@ -25,6 +25,15 @@ if [[ "$SIGNING_MODE" == notarized ]]; then
     echo "Notarized releases require a Developer ID Application identity." >&2
     exit 1
   fi
+elif [[ "$SIGNING_MODE" == development ]]; then
+  IDENTITY="${CODESIGN_IDENTITY:-}"
+  if [[ -z "$IDENTITY" && -f .signing-identity ]]; then IDENTITY="$(cat .signing-identity)"; fi
+  if [[ -z "$IDENTITY" || "$IDENTITY" == - ]]; then
+    echo 'Development releases require a stable Apple Development identity.' >&2
+    exit 1
+  fi
+  export CODESIGN_IDENTITY="$IDENTITY"
+  echo 'Preparing a certificate-signed development release without Apple notarization.' >&2
 else
   export CODESIGN_IDENTITY=-
   echo "Preparing an ad-hoc signed release without Apple notarization. Gatekeeper may block first launch." >&2
@@ -34,7 +43,7 @@ if [[ -e "$DESTINATION" ]]; then
   exit 1
 fi
 if [[ -n "$(git status --porcelain --untracked-files=no)" ||
-      -n "$(git ls-files --others --exclude-standard -- Parrot Parrot.xcodeproj scripts Tests .github docs ReleaseNotes Package.swift build.sh README.md .gitignore LICENSE)" ]]; then
+      -n "$(git ls-files --others --exclude-standard -- Parrot Parrot.xcodeproj Artwork scripts Tests .github docs ReleaseNotes Package.swift build.sh README.md .gitignore LICENSE)" ]]; then
   echo "Commit the release source and notes first so the GitHub tag matches the shipped app." >&2
   exit 1
 fi
@@ -66,6 +75,14 @@ esac
 
 VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" ./build.sh release universal
 APP="$PARROT_ROOT/build/Parrot.app"
+if [[ "$SIGNING_MODE" == development ]]; then
+  SIGNATURE_DETAILS="$(codesign -dv --verbose=2 "$APP" 2>&1)"
+  if ! grep -q '^Authority=Apple Development:' <<< "$SIGNATURE_DETAILS"; then
+    echo 'Development release must be signed by an Apple Development certificate.' >&2
+    exit 1
+  fi
+  python3 scripts/check-signing-continuity.py "$APP"
+fi
 if [[ "$SIGNING_MODE" == notarized ]]; then
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$STAGING/notarize.zip"
 xcrun notarytool submit "$STAGING/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait \
@@ -87,6 +104,9 @@ ARCHIVE="Parrot-$VERSION.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ASSETS/$ARCHIVE"
 if [[ "$SIGNING_MODE" == ad-hoc ]]; then
   printf '%s\n\n' '**Signing notice:** This build is ad-hoc signed and has not been notarized by Apple. macOS Gatekeeper may block the first launch. Its update archive and feed are signed with the Parrot Sparkle key.' > "$ASSETS/release-notes.md"
+  cat "$NOTES" >> "$ASSETS/release-notes.md"
+elif [[ "$SIGNING_MODE" == development ]]; then
+  printf '%s\n\n' '**Signing notice:** This release uses an Apple Development certificate and signed Sparkle updates. It is not Apple-notarized; macOS may block first launch. Replacing an old ad-hoc build can require one permission approval. Subsequent builds using the same identity are intended to retain approval.' > "$ASSETS/release-notes.md"
   cat "$NOTES" >> "$ASSETS/release-notes.md"
 else
   cp "$NOTES" "$ASSETS/release-notes.md"

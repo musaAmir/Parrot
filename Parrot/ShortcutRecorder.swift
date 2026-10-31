@@ -9,6 +9,7 @@ import SwiftUI
 import AppKit
 
 struct ShortcutRecorder: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
     @Binding var keyCode: UInt16
     @Binding var modifierFlags: NSEvent.ModifierFlags
 
@@ -22,8 +23,11 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: ShortcutRecorderView, context: Context) {
+        nsView.isCaptureEnabled = isEnabled
         nsView.keyCode = keyCode
         nsView.modifierFlags = modifierFlags
+        nsView.setAccessibilityValue(nsView.shortcutString())
+        nsView.needsDisplay = true
     }
 }
 
@@ -31,6 +35,9 @@ class ShortcutRecorderView: NSView {
     var keyCode: UInt16 = 5
     var modifierFlags: NSEvent.ModifierFlags = .option
     var onShortcutCapture: ((UInt16, NSEvent.ModifierFlags) -> Void)?
+    var isCaptureEnabled = true {
+        didSet { if !isCaptureEnabled && isRecording { cancelRecording() } }
+    }
     var isRecording = false
     var isHovering = false
 
@@ -48,18 +55,11 @@ class ShortcutRecorderView: NSView {
     }
 
     func setup() {
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Recording shortcut")
+        setAccessibilityHelp("Press to choose a shortcut. Escape cancels.")
         wantsLayer = true
-
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
-        layer?.borderWidth = 1.5
-        layer?.cornerRadius = 10
-        layer?.cornerCurve = .continuous
-
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.08
-        layer?.shadowOffset = CGSize(width: 0, height: 1)
-        layer?.shadowRadius = 3
 
         updateTrackingAreas()
     }
@@ -88,7 +88,21 @@ class ShortcutRecorderView: NSView {
         updateAppearance(animated: true)
     }
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { isCaptureEnabled }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isCaptureEnabled else { return false }
+        beginCapture()
+        return true
+    }
+
+    private func beginCapture() {
+        isRecording = true
+        startPulseAnimation()
+        updateAppearance(animated: true)
+        needsDisplay = true
+        window?.makeFirstResponder(self)
+    }
 
     override func resignFirstResponder() -> Bool {
         if isRecording {
@@ -105,11 +119,8 @@ class ShortcutRecorderView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        isRecording = true
-        startPulseAnimation()
-        updateAppearance(animated: true)
-        needsDisplay = true
-        window?.makeFirstResponder(self)
+        guard isCaptureEnabled else { return }
+        beginCapture()
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.1
@@ -123,7 +134,12 @@ class ShortcutRecorderView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        guard isRecording else { return }
+        guard isCaptureEnabled else { return }
+        if !isRecording {
+            if event.keyCode == 36 || event.keyCode == 49 { beginCapture() }
+            else { super.keyDown(with: event) }
+            return
+        }
 
         if event.keyCode == 53 {  // Escape cancels
             cancelRecording()
@@ -143,31 +159,7 @@ class ShortcutRecorderView: NSView {
         cancelRecording()
     }
 
-    private func updateAppearance(animated: Bool) {
-        let duration = animated ? 0.2 : 0
-
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
-            if isRecording {
-                self.layer?.borderColor = NSColor.controlAccentColor.cgColor
-                self.layer?.borderWidth = 2.5
-                self.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.08).cgColor
-                self.layer?.shadowOpacity = 0.15
-            } else if isHovering {
-                self.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor
-                self.layer?.borderWidth = 1.5
-                self.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.7).cgColor
-                self.layer?.shadowOpacity = 0.12
-            } else {
-                self.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
-                self.layer?.borderWidth = 1.5
-                self.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-                self.layer?.shadowOpacity = 0.08
-            }
-        })
-    }
+    private func updateAppearance(animated: Bool) { needsDisplay = true }
 
     private func startPulseAnimation() {
         let pulse = CABasicAnimation(keyPath: "borderWidth")
@@ -203,32 +195,21 @@ class ShortcutRecorderView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-
-        let text: String
-        let textColor: NSColor
-
-        if isRecording {
-            text = "Press your shortcut..."
-            textColor = NSColor.controlAccentColor
-        } else {
-            text = shortcutString()
-            textColor = NSColor.labelColor
+        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        let text = isRecording ? "Press shortcut…" : shortcutString()
+        let keys = isRecording ? [text] : text.split(separator: " ").flatMap { part in
+            part.count > 1 && part.allSatisfy({ "⌃⌥⇧⌘".contains($0) }) ? part.map(String.init) : [String(part)]
         }
-
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .center
-
-        let fontSize: CGFloat = isRecording ? 14 : 16
-        let fontWeight: NSFont.Weight = isRecording ? .medium : .semibold
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: fontWeight),
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraphStyle
-        ]
-
-        let textRect = NSRect(x: 0, y: (bounds.height - 22) / 2, width: bounds.width, height: 22)
-        text.draw(in: textRect, withAttributes: attributes)
+        let widths = keys.map { max(22, ceil(($0 as NSString).size(withAttributes: [.font: font]).width) + 12) }
+        var x = bounds.maxX - widths.reduce(0, +) - CGFloat(max(0, keys.count - 1)) * 4
+        for (index, key) in keys.enumerated() {
+            let rect = NSRect(x: x, y: bounds.midY - 10, width: widths[index], height: 20)
+            (isRecording ? NSColor.controlAccentColor.withAlphaComponent(0.25) : NSColor.quaternaryLabelColor).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+            let size = (key as NSString).size(withAttributes: [.font: font])
+            (key as NSString).draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), withAttributes: [.font: font, .foregroundColor: NSColor.labelColor])
+            x += widths[index] + 4
+        }
     }
 
     func shortcutString() -> String {
@@ -236,7 +217,7 @@ class ShortcutRecorderView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        return NSSize(width: 220, height: 44)
+        return NSSize(width: 140, height: 26)
     }
 
     override var focusRingMaskBounds: NSRect {

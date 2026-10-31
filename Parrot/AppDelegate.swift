@@ -40,6 +40,7 @@ final class ShortcutSnapshot: @unchecked Sendable {
 
 @MainActor class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     let updates = UpdateController()
+    var settingsController: ParrotSettingsController?
     private var shortcutPresses = ShortcutPressTracker()
     var statusItem: NSStatusItem?
     var audioManager: AudioManager!
@@ -202,6 +203,10 @@ final class ShortcutSnapshot: @unchecked Sendable {
         saveItem.target = self
         menu.addItem(saveItem)
 
+        let libraryItem = NSMenuItem(title: "Recordings…", action: #selector(openRecordings), keyEquivalent: "r")
+        libraryItem.target = self
+        menu.addItem(libraryItem)
+
         recentRecordingsItem = NSMenuItem(title: "Recent Recordings", action: nil, keyEquivalent: "")
         recentRecordingsItem?.submenu = NSMenu()
         menu.addItem(recentRecordingsItem!)
@@ -296,6 +301,10 @@ final class ShortcutSnapshot: @unchecked Sendable {
             return
         }
 
+        saveRecording(source)
+    }
+
+    func saveRecording(_ source: URL) {
         // A save panel needs a real app to attach to, so make sure we have one.
         let wasAccessory = NSApp.activationPolicy() == .accessory
         if wasAccessory { NSApp.setActivationPolicy(.regular) }
@@ -373,8 +382,9 @@ final class ShortcutSnapshot: @unchecked Sendable {
 
     func showPermissionAlert(for permission: String) {
         let alert = NSAlert()
-        alert.messageText = "\(permission) Permission Required"
-        alert.informativeText = "Parrot needs \(permission.lowercased()) access to function properly. Please grant permission in System Settings."
+        let displayPermission = permission.lowercased() == "accessibility" ? PermissionManager.controlPermissionTitle : permission
+        alert.messageText = "\(displayPermission) Permission Required"
+        alert.informativeText = "Parrot needs \(displayPermission) access to function properly. Please grant permission in System Settings."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Later")
@@ -579,6 +589,11 @@ final class ShortcutSnapshot: @unchecked Sendable {
         toggleShortcutPressTime = nil
     }
 
+    @objc func openRecordings() {
+        openSettings()
+        settingsController?.select(.recordings)
+    }
+
     @objc func openSettings() {
         // Temporarily switch to regular app to show window properly
         if NSApp.activationPolicy() == .accessory {
@@ -586,22 +601,10 @@ final class ShortcutSnapshot: @unchecked Sendable {
         }
 
         if settingsWindow == nil {
-            let settingsView = SettingsView(
-                audioManager: audioManager,
-                permissionManager: permissionManager,
-                updates: updates,
-                onClose: { [weak self] in
-                    self?.closeSettingsWindow()
-                }
-            )
-            let hostingController = NSHostingController(rootView: settingsView)
-
-            settingsWindow = NSWindow(contentViewController: hostingController)
-            settingsWindow?.title = "Parrot Settings"
-            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 650, height: 420))
-            settingsWindow?.center()
-            settingsWindow?.isReleasedWhenClosed = false
+            let controller = ParrotSettingsController(audio: audioManager, permissions: permissionManager, updates: updates,
+                save: { [weak self] url in self?.saveRecording(url) })
+            settingsController = controller
+            settingsWindow = controller.window
             settingsWindow?.delegate = self
         }
 
@@ -625,6 +628,7 @@ final class ShortcutSnapshot: @unchecked Sendable {
         // Check if it's the settings window closing
         if let window = notification.object as? NSWindow, window == settingsWindow {
             settingsWindow = nil
+            settingsController = nil
             // Restore accessory mode if dock icon should be hidden
             if !audioManager.showDockIcon {
                 NSApp.setActivationPolicy(.accessory)

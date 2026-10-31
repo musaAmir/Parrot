@@ -15,6 +15,6 @@ jobs:
       - name: Test release metadata
         run: python3 -m unittest discover -s Tests/ReleaseScripts
       - name: Build Apple silicon and Intel app
-        run: ./build.sh release universal
+        run: CODESIGN_IDENTITY=- ./build.sh release universal
       - name: Verify packaged Sparkle and signed updates
         run: Tests/ReleaseScripts/smoke-sparkle.sh

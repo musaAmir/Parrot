@@ -10,11 +10,69 @@ import AppKit
 import Combine
 import CoreAudio
 
+protocol RecordingSession: AnyObject {
+    var delegate: AVAudioRecorderDelegate? { get set }
+    var isMeteringEnabled: Bool { get set }
+    var isRecording: Bool { get }
+    var currentTime: TimeInterval { get }
+    func record(forDuration duration: TimeInterval) -> Bool
+    func pause()
+    func stop()
+    func updateMeters()
+    func averagePower(forChannel channelNumber: Int) -> Float
+}
+extension AVAudioRecorder: RecordingSession {}
+
+enum RecordingCue { case start, stop }
+
+protocol RecordingFeedback: AnyObject {
+    func play(_ cue: RecordingCue, completion: @escaping () -> Void)
+    func cancel()
+}
+
+final class SystemRecordingFeedback: NSObject, RecordingFeedback, NSSoundDelegate {
+    private var activeSound: NSSound?
+    private var completion: (() -> Void)?
+
+    func play(_ cue: RecordingCue, completion: @escaping () -> Void) {
+        cancel()
+        let name = cue == .start ? "Purr" : "Bottle"
+        guard let sound = NSSound(named: NSSound.Name(name))?.copy() as? NSSound else {
+            completion(); return
+        }
+        self.completion = completion
+        activeSound = sound
+        sound.delegate = self
+        if !sound.play() { finish(sound) }
+    }
+
+    func cancel() {
+        let sound = activeSound
+        activeSound = nil
+        completion = nil
+        sound?.delegate = nil
+        sound?.stop()
+    }
+
+    func sound(_ sound: NSSound, didFinishPlaying flag: Bool) { finish(sound) }
+
+    private func finish(_ sound: NSSound) {
+        guard activeSound === sound else { return }
+        let action = completion
+        activeSound = nil
+        completion = nil
+        action?()
+    }
+}
+
 class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRecorderDelegate {
     @Published private(set) var lastError: String?
     @Published var playbackDelay: Double = 0.5
     @Published var selectedInputDeviceUID: String?
     @Published var isRecording = false
+    @Published private(set) var isPreparingToRecord = false
+    @Published private(set) var isRecordingPaused = false
+    @Published var showRecordingControls = true
     @Published var isPlaying = false
     @Published var isPaused = false
     @Published var hasSoundStarted = false
@@ -53,7 +111,10 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     /// Seconds elapsed in the current recording.
     @Published var recordingDuration: TimeInterval = 0
 
-    private var audioRecorder: AVAudioRecorder?
+    private let feedbackSounds: RecordingFeedback
+    private let feedbackSettlingDelay: TimeInterval
+    private var audioRecorder: RecordingSession?
+    private let makeRecorder: (URL, [String: Any]) throws -> RecordingSession
     private var audioPlayer: AVAudioPlayer?
     private var recordedFileURL: URL?
     private var cancellables = Set<AnyCancellable>()
@@ -65,10 +126,17 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     private var previousDefaultInputUID: String?
     private var appliedInputUID: String?
     private let playbackScheduler = PlaybackScheduler()
+    private let recordingStartScheduler = PlaybackScheduler()
+    private var recordingStartGeneration = UUID()
+    private let recordingDirectory: URL?
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, recordingDirectory: URL? = nil, feedbackSounds: RecordingFeedback = SystemRecordingFeedback(), feedbackSettlingDelay: TimeInterval = 0.15, makeRecorder: @escaping (URL, [String: Any]) throws -> RecordingSession = { try AVAudioRecorder(url: $0, settings: $1) }) {
+        self.feedbackSounds = feedbackSounds
+        self.feedbackSettlingDelay = feedbackSettlingDelay
         self.defaults = defaults
+        self.recordingDirectory = recordingDirectory
+        self.makeRecorder = makeRecorder
         super.init()
         loadSettings()
         DispatchQueue.main.async { [weak self] in
@@ -96,6 +164,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             $selectedOutputDeviceID.map { _ in }.eraseToAnyPublisher(),
             $showDockIcon.map { _ in }.eraseToAnyPublisher(),
             $showMenuBarIcon.map { _ in }.eraseToAnyPublisher(),
+            $showRecordingControls.map { _ in }.eraseToAnyPublisher(),
             $showPlaybackIndicator.map { _ in }.eraseToAnyPublisher(),
             $playFeedbackSounds.map { _ in }.eraseToAnyPublisher(),
             $overlayDismissDelay.map { _ in }.eraseToAnyPublisher(),
@@ -173,6 +242,10 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         maxRecordingDuration = Self.clamped(maxRecordingDuration, to: 10...600, fallback: 120)
         overlayDismissDelay = Self.clamped(overlayDismissDelay, to: 1...20, fallback: 5)
 
+        if defaults.object(forKey: "showRecordingControls") != nil {
+            showRecordingControls = defaults.bool(forKey: "showRecordingControls")
+        }
+
         // Safety: On first launch, always show dock icon
         if isFirstLaunch {
             showDockIcon = true
@@ -208,6 +281,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         defaults.setOrRemove(selectedInputDeviceUID, forKey: "selectedInputDeviceUID")
         defaults.set(showDockIcon, forKey: "showDockIcon")
         defaults.set(showMenuBarIcon, forKey: "showMenuBarIcon")
+        defaults.set(showRecordingControls, forKey: "showRecordingControls")
         defaults.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
         defaults.set(playFeedbackSounds, forKey: "playFeedbackSounds")
         defaults.set(overlayDismissDelay, forKey: "overlayDismissDelay")
@@ -224,9 +298,33 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         playbackScheduler.cancel()
         lastError = nil
         discardCurrentRecording()
+        recordingDuration = 0
+        recordingLevel = 0
+        isRecordingPaused = false
+        isPreparingToRecord = true
+        isRecording = true
+        recordingStartGeneration = UUID()
+        let generation = recordingStartGeneration
+
+        if playFeedbackSounds {
+            feedbackSounds.play(.start) { [weak self] in
+                guard let self, self.isPreparingToRecord, self.recordingStartGeneration == generation else { return }
+                // The speaker cue is finished; let its acoustic tail fade before opening the mic.
+                self.recordingStartScheduler.schedule(after: self.feedbackSettlingDelay) { [weak self] in
+                    guard let self, self.recordingStartGeneration == generation else { return }
+                    self.beginRecordingCapture()
+                }
+            }
+        } else {
+            beginRecordingCapture()
+        }
+    }
+
+    private func beginRecordingCapture() {
+        guard isRecording, isPreparingToRecord else { return }
         applyInputDevice()
 
-        let url = RecordingStore.newRecordingURL()
+        let url = RecordingStore.newRecordingURL(in: recordingDirectory ?? RecordingStore.directory)
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -236,13 +334,13 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         ]
 
         do {
-            let recorder = try AVAudioRecorder(url: url, settings: settings)
+            let recorder = try makeRecorder(url, settings)
             recorder.isMeteringEnabled = true
             guard recorder.record(forDuration: maxRecordingDuration) else {
                 Log.audio.error("AVAudioRecorder refused to start")
                 lastError = "Recording couldn’t start. Check microphone access and the selected input device."
                 try? FileManager.default.removeItem(at: url)
-                restoreDefaultDevices()
+                cancelRecording()
                 return
             }
             recorder.delegate = self
@@ -251,28 +349,51 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             recordedFileURL = url
             recordingDuration = 0
             recordingLevel = 0
-            isRecording = true
+            isPreparingToRecord = false
             startRecordingTimer()
-            playStartSound()
             Log.audio.info("Recording started")
         } catch {
             lastError = "Recording failed: \(error.localizedDescription)"
             try? FileManager.default.removeItem(at: url)
             Log.audio.error("Failed to start recording: \(error.localizedDescription)")
-            restoreDefaultDevices()
+            cancelRecording()
+        }
+    }
+
+    /// Paused takes remain active so shortcuts, sleep and Stop finish the same file.
+    func toggleRecordingPause() {
+        guard isRecording, let recorder = audioRecorder else { return }
+        if isRecordingPaused {
+            let remaining = maxRecordingDuration - recordingDuration
+            guard remaining > 0 else { stopRecordingAndPlayback(); return }
+            guard recorder.record(forDuration: remaining) else {
+                lastError = "Recording couldn’t resume. Stop this take and check the microphone."
+                return
+            }
+            isRecordingPaused = false
+            startRecordingTimer()
+        } else {
+            recordingDuration = recorder.currentTime
+            recorder.pause()
+            stopRecordingTimer()
+            isRecordingPaused = true
         }
     }
 
     func stopRecordingAndPlayback() {
         guard isRecording else { return }
+        if isPreparingToRecord {
+            cancelRecording()
+            return
+        }
 
         audioRecorder?.delegate = nil
         audioRecorder?.stop()
         audioRecorder = nil
         stopRecordingTimer()
+        isRecordingPaused = false
         isRecording = false
         restoreDefaultDevices()
-        playStopSound()
         Log.audio.info("Recording stopped after \(self.recordingDuration, format: .fixed(precision: 1))s")
 
         finishTakeAndSchedulePlayback()
@@ -314,10 +435,10 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             guard let self, let recorder, self.audioRecorder === recorder, self.isRecording else { return }
             self.stopRecordingTimer()
             self.audioRecorder = nil
+            self.isRecordingPaused = false
             self.isRecording = false
             self.restoreDefaultDevices()
             if flag {
-                self.playStopSound()
                 self.finishTakeAndSchedulePlayback()
             } else {
                 self.lastError = "The recording was interrupted and couldn’t be completed."
@@ -334,19 +455,32 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     private func finishTakeAndSchedulePlayback() {
         pruneStoredRecordings()
         guard let url = currentRecordingURL else { return }
-        playbackScheduler.schedule(after: playbackDelay) { [weak self] in
+        let schedulePlayback = { [weak self] in
             guard let self, !self.isRecording, self.currentRecordingURL == url else { return }
-            self.play(url: url)
+            self.playbackScheduler.schedule(after: self.playbackDelay) { [weak self] in
+                guard let self, !self.isRecording, self.currentRecordingURL == url else { return }
+                self.play(url: url)
+            }
+        }
+        if playFeedbackSounds {
+            feedbackSounds.play(.stop, completion: schedulePlayback)
+        } else {
+            schedulePlayback()
         }
     }
 
     /// Sleep and termination must never start a delayed playback or leave the mic open.
     func cancelRecording() {
+        recordingStartGeneration = UUID()
+        recordingStartScheduler.cancel()
+        feedbackSounds.cancel()
+        isPreparingToRecord = false
         playbackScheduler.cancel()
         audioRecorder?.delegate = nil
         audioRecorder?.stop()
         audioRecorder = nil
         stopRecordingTimer()
+        isRecordingPaused = false
         isRecording = false
         restoreDefaultDevices()
         pruneStoredRecordings()
@@ -467,6 +601,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     }
 
     func stopPlayback() {
+        feedbackSounds.cancel()
         playbackScheduler.cancel()
         stopPlaybackTimer()
         isPlaying = false
@@ -503,11 +638,11 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     /// recordings back to the retention limit.
     func pruneStoredRecordings() {
         RecordingStore.prune(keeping: keepRecordings ? RecordingStore.retentionLimit : 0,
-                            excluding: recordedFileURL)
+                            excluding: recordedFileURL, in: recordingDirectory ?? RecordingStore.directory)
     }
 
     func recentRecordings() -> [Recording] {
-        RecordingStore.recentRecordings()
+        RecordingStore.recentRecordings(in: recordingDirectory ?? RecordingStore.directory)
     }
 
     func getAvailableInputDevices() -> [AudioDevice] {
@@ -539,13 +674,4 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         AudioDevices.setDefaultDevice(uid: previous, for: .input)
     }
 
-    private func playStartSound() {
-        guard playFeedbackSounds else { return }
-        NSSound(named: "Purr")?.play()
-    }
-
-    private func playStopSound() {
-        guard playFeedbackSounds else { return }
-        NSSound(named: "Bottle")?.play()
-    }
 }

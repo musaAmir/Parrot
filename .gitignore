@@ -27,3 +27,10 @@ boltai-data-*.json
 # Python test caches
 __pycache__/
 *.pyc
+
+# Local public signing certificate fingerprint (private key stays in Keychain)
+.signing-identity
+
+# Search-excluded build output and its compatibility symlink
+/build
+/build.noindex/

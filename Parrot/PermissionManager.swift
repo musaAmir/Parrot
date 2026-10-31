@@ -10,6 +10,11 @@ import AppKit
 import Combine
 
 class PermissionManager: ObservableObject {
+    static var controlPermissionTitle: String {
+        if #available(macOS 27, *) { return "Device Control and Data Access" }
+        return "Accessibility"
+    }
+
     @Published var microphoneStatus: PermissionStatus = .notDetermined
     @Published var accessibilityStatus: PermissionStatus = .notDetermined
 

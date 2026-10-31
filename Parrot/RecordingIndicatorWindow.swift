@@ -7,16 +7,18 @@
 
 import Cocoa
 import SwiftUI
+import Combine
 
 class RecordingIndicatorWindow: NSWindow {
     private let audioManager: AudioManager
+    private var controlSubscription: AnyCancellable?
     weak var appDelegate: AppDelegate?
 
     init(audioManager: AudioManager, appDelegate: AppDelegate? = nil) {
         self.appDelegate = appDelegate
         self.audioManager = audioManager
         let screenFrame = NSScreen.main?.frame ?? NSRect.zero
-        let windowWidth: CGFloat = 220
+        let windowWidth: CGFloat = audioManager.showRecordingControls ? 340 : 220
         let windowHeight: CGFloat = 50
 
         let savedOrigin = RecordingIndicatorWindow.loadSavedPosition(screenFrame: screenFrame, windowWidth: windowWidth, windowHeight: windowHeight)
@@ -42,6 +44,12 @@ class RecordingIndicatorWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
         self.orderOut(nil)
+        controlSubscription = audioManager.$showRecordingControls.removeDuplicates().sink { [weak self] enabled in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.setContentSize(NSSize(width: enabled ? 340 : 220, height: 50))
+            }
+        }
     }
 
     private static func loadSavedPosition(screenFrame: NSRect, windowWidth: CGFloat, windowHeight: CGFloat) -> NSPoint {
@@ -122,6 +130,7 @@ class RecordingIndicatorWindow: NSWindow {
 /// history of real level readings from `AVAudioRecorder`'s meters.
 struct RecordingIndicatorView: View {
     @ObservedObject var audioManager: AudioManager
+    var preview = false
     @State private var levels: [Double] = Array(repeating: 0, count: barCount)
     @State private var isPulsing: Bool = false
 
@@ -143,7 +152,7 @@ struct RecordingIndicatorView: View {
         HStack(spacing: 10) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.red.opacity(isPulsing ? 1.0 : 0.45))
+                .foregroundStyle(audioManager.isRecordingPaused ? .orange : .red.opacity(isPulsing ? 1.0 : 0.45))
 
             HStack(spacing: 3) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
@@ -155,11 +164,30 @@ struct RecordingIndicatorView: View {
             }
             .animation(.linear(duration: 0.05), value: levels)
 
-            Text(timeLabel)
+            Text(audioManager.isPreparingToRecord ? "Starting…" : (audioManager.isRecordingPaused ? "Paused" : timeLabel))
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(isRunningOut ? .orange : .white.opacity(0.9))
+            if audioManager.showRecordingControls {
+                Divider().frame(height: 20)
+                Button { audioManager.toggleRecordingPause() } label: {
+                    Image(systemName: audioManager.isRecordingPaused ? "play.fill" : "pause.fill")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.bordered)
+                .help(audioManager.isRecordingPaused ? "Resume recording" : "Pause recording")
+                .accessibilityLabel(audioManager.isRecordingPaused ? "Resume recording" : "Pause recording")
+                .disabled(preview || audioManager.isPreparingToRecord)
+                Button { audioManager.stopRecordingAndPlayback() } label: {
+                    Image(systemName: "stop.fill").frame(width: 28, height: 28)
+                }
+                .buttonStyle(.bordered)
+                .help(audioManager.isPreparingToRecord ? "Cancel recording" : "Stop recording and listen")
+                .accessibilityLabel(audioManager.isPreparingToRecord ? "Cancel recording" : "Stop recording and listen")
+                .disabled(preview)
+            }
         }
+        .fixedSize()
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
@@ -170,13 +198,14 @@ struct RecordingIndicatorView: View {
         )
         .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         .onAppear {
+            if preview { levels = [0.2, 0.4, 0.7, 0.35, 0.6, 0.9, 0.5, 0.25, 0.5, 0.75, 0.4, 0.6, 0.3, 0.15] }
             withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 isPulsing = true
             }
         }
         .onReceive(audioManager.$recordingLevel) { level in
             levels.removeFirst()
-            levels.append(level)
+            levels.append(preview ? 0.25 : level)
         }
         .onChange(of: audioManager.isRecording) { _, isRecording in
             if !isRecording {
