@@ -9,19 +9,11 @@ ARGS=()
 case "$ARCHITECTURES" in native) ARGS+=("ARCHS=$(uname -m)") ;; universal) ARGS+=("ARCHS=arm64 x86_64") ;; *) exit 2 ;; esac
 [[ -z "${VERSION:-}" ]] || ARGS+=("MARKETING_VERSION=$VERSION")
 [[ -z "${BUILD_NUMBER:-}" ]] || ARGS+=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
-# Spotlight and Alfred should index the installed app, not Xcode products/backups.
-# Keep the historical build/ path usable by release scripts through a symlink.
-if [[ -d build && ! -L build ]]; then
-  if [[ -e build.noindex ]]; then
-    echo 'Both build/ and build.noindex/ exist; consolidate build output before building.' >&2
-    exit 1
-  fi
-  mv build build.noindex
-fi
-mkdir -p build.noindex
-if [[ ! -e build && ! -L build ]]; then ln -s build.noindex build; fi
+# Use the same physical paths for package resolution and every architecture.
+source scripts/build-paths.sh
+parrot_init_build_directory "$PWD"
 if ! xcodebuild -project Parrot.xcodeproj -scheme Parrot -configuration "$XCODE_CONFIG" \
-  -derivedDataPath build/DerivedData -clonedSourcePackagesDirPath build/SourcePackages \
+  -derivedDataPath "$PARROT_BUILD_ROOT/DerivedData" -clonedSourcePackagesDirPath "$PARROT_BUILD_ROOT/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES "${ARGS[@]}" build > build/xcodebuild.log 2>&1; then
   tail -80 build/xcodebuild.log >&2
   exit 1

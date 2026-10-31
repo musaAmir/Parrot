@@ -2,10 +2,12 @@
 # Shared paths; source this file from the release scripts.
 PARROT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-com.parrot.app.sparkle}"
-SPARKLE_TOOLS="$PARROT_ROOT/build/SourcePackages/artifacts/sparkle/Sparkle/bin"
+source "$PARROT_ROOT/scripts/build-paths.sh"
+SPARKLE_TOOLS="$PARROT_ROOT/build.noindex/SourcePackages/artifacts/sparkle/Sparkle/bin"
 
 resolve_sparkle() {
-  xcodebuild -resolvePackageDependencies -project "$PARROT_ROOT/Parrot.xcodeproj" -scheme Parrot -clonedSourcePackagesDirPath "$PARROT_ROOT/build/SourcePackages" >/dev/null
+  parrot_init_build_directory "$PARROT_ROOT"
+  xcodebuild -resolvePackageDependencies -project "$PARROT_ROOT/Parrot.xcodeproj" -scheme Parrot -clonedSourcePackagesDirPath "$PARROT_BUILD_ROOT/SourcePackages" >/dev/null
   if [[ ! -x "$SPARKLE_TOOLS/generate_appcast" ]]; then
     echo "Sparkle's release tools are missing from the SwiftPM artifact." >&2
     exit 1
