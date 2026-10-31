@@ -73,6 +73,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     @Published private(set) var isPreparingToRecord = false
     @Published private(set) var isRecordingPaused = false
     @Published var showRecordingControls = true
+    @Published var panelShape: PanelShape = .squared
     @Published var isPlaying = false
     @Published var isPaused = false
     @Published var hasSoundStarted = false
@@ -164,6 +165,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             $selectedOutputDeviceID.map { _ in }.eraseToAnyPublisher(),
             $showDockIcon.map { _ in }.eraseToAnyPublisher(),
             $showMenuBarIcon.map { _ in }.eraseToAnyPublisher(),
+            $panelShape.map { _ in }.eraseToAnyPublisher(),
             $showRecordingControls.map { _ in }.eraseToAnyPublisher(),
             $showPlaybackIndicator.map { _ in }.eraseToAnyPublisher(),
             $playFeedbackSounds.map { _ in }.eraseToAnyPublisher(),
@@ -246,6 +248,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             showRecordingControls = defaults.bool(forKey: "showRecordingControls")
         }
 
+        if let shape = defaults.string(forKey: "panelShape").flatMap(PanelShape.init(rawValue:)) { panelShape = shape }
+
         // Safety: On first launch, always show dock icon
         if isFirstLaunch {
             showDockIcon = true
@@ -281,6 +285,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         defaults.setOrRemove(selectedInputDeviceUID, forKey: "selectedInputDeviceUID")
         defaults.set(showDockIcon, forKey: "showDockIcon")
         defaults.set(showMenuBarIcon, forKey: "showMenuBarIcon")
+        defaults.set(panelShape.rawValue, forKey: "panelShape")
         defaults.set(showRecordingControls, forKey: "showRecordingControls")
         defaults.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
         defaults.set(playFeedbackSounds, forKey: "playFeedbackSounds")
@@ -564,6 +569,16 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         // The file stays put so the overlay can replay it, and so it can be saved.
     }
 
+    var playbackTimeLabel: String {
+        guard let player = audioPlayer else { return "0:00 / 0:00" }
+        func time(_ seconds: TimeInterval) -> String {
+            let value = max(0, Int(seconds.isFinite ? seconds : 0))
+            return String(format: "%d:%02d", value / 60, value % 60)
+        }
+        let elapsed = !isPlaying && playbackProgress >= 1 ? player.duration : player.currentTime
+        return "\(time(elapsed)) / \(time(player.duration))"
+    }
+
     func togglePlayback() {
         guard let player = audioPlayer else { return }
         if player.isPlaying {
@@ -601,7 +616,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     }
 
     func stopPlayback() {
-        feedbackSounds.cancel()
+        // Dismissing an old player must not interrupt the cue for a new recording.
+        if !isPreparingToRecord { feedbackSounds.cancel() }
         playbackScheduler.cancel()
         stopPlaybackTimer()
         isPlaying = false

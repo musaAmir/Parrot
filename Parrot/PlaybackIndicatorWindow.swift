@@ -1,144 +1,58 @@
-//
-//  PlaybackIndicatorWindow.swift
-//  Parrot
-//
-//  Minimalistic playback progress bar at the bottom of the screen
-//
-
-import Cocoa
+import AppKit
 import SwiftUI
-import Combine
 
-class PlaybackIndicatorWindow: NSWindow {
-    private var audioManager: AudioManager?
-    private var cancellables = Set<AnyCancellable>()
-    private var progressView: NSHostingView<PlaybackIndicatorView>?
+class PlaybackIndicatorWindow: FloatingPanelWindow {
+    private let audioManager: AudioManager
     var onReplay: (() -> Void)?
+    var onClose: (() -> Void)?
 
     init(audioManager: AudioManager) {
         self.audioManager = audioManager
-        let screenFrame = NSScreen.main?.frame ?? NSRect.zero
-        let windowWidth: CGFloat = 340 // Increased width for controls
-        let windowHeight: CGFloat = 40 // Increased height for controls
-
-        let xPos = (screenFrame.width - windowWidth) / 2
-        let yPos: CGFloat = 40
-
-        let contentRect = NSRect(
-            x: xPos,
-            y: yPos,
-            width: windowWidth,
-            height: windowHeight
-        )
-
-        super.init(
-            contentRect: contentRect,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        self.level = .floating
-        self.isOpaque = false
-        self.backgroundColor = .clear
-        self.ignoresMouseEvents = false // Allow interaction
-        self.collectionBehavior = [.canJoinAllSpaces, .stationary]
-
-        let view = PlaybackIndicatorView(audioManager: audioManager, onReplay: { [weak self] in
-            self?.onReplay?()
-        })
-        progressView = NSHostingView(rootView: view)
-        self.contentView = progressView
-
-        self.orderOut(nil)
-        setupBindings()
+        super.init(size: PanelMetrics.windowSize(bodyWidth: PanelMetrics.playbackWidth),
+                   positionKey: "playbackPanelCenter", anchor: .bottom)
+        setAccessibilityTitle("Parrot Playback")
+        installContent(PlaybackIndicatorView(audioManager: audioManager,
+            onReplay: { [weak self] in self?.onReplay?() }, onClose: { [weak self] in self?.onClose?() }))
     }
-
-    private func setupBindings() {
-        // No longer needed as we use ObservedObject in the view
-    }
-
-    override var canBecomeKey: Bool {
-        return true
-    }
-
-    func show() {
-        self.alphaValue = 0
-        self.orderFront(nil)
-
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.15
-            self.animator().alphaValue = 1.0
-        })
-    }
-
-    func hide() {
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.3
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.animator().alphaValue = 0.0
-        }, completionHandler: {
-            guard self.audioManager?.isPlaying != true else { return }
-            self.orderOut(nil)
-        })
-    }
+    func show() { showPanel() }
+    func hide() { hidePanel() }
 }
 
 struct PlaybackIndicatorView: View {
     @ObservedObject var audioManager: AudioManager
+    var preview = false
     var onReplay: (() -> Void)?
+    var onClose: (() -> Void)?
 
+    private var playing: Bool { audioManager.isPlaying && !audioManager.isPaused }
     var body: some View {
-        HStack(spacing: 12) {
-            // Rewind Button
-            Button(action: {
+        HStack(spacing: 10) {
+            PanelDragHandle().frame(width: 12, height: 28).allowsHitTesting(!preview)
+            PanelIconButton(symbol: "arrow.counterclockwise", label: "Replay recording") {
                 audioManager.replayRecording()
                 onReplay?()
-            }) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-            }
-            .buttonStyle(.plain)
-
-            // Play/Pause Button
-            Button(action: {
+            }.disabled(preview)
+            PanelIconButton(symbol: playing ? "pause.fill" : "play.fill", label: playing ? "Pause playback" : "Play recording") {
                 audioManager.togglePlayback()
-            }) {
-                Image(systemName: audioManager.isPaused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-            }
-            .buttonStyle(.plain)
-            
-            // Progress Bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(.white.opacity(0.2))
-
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(.white.opacity(0.8))
-                        .frame(width: geometry.size.width * audioManager.playbackProgress)
+                onReplay?()
+            }.disabled(preview)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(preview ? "0:08 / 0:24" : audioManager.playbackTimeLabel)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .monospacedDigit().foregroundStyle(.secondary)
+                Slider(value: Binding(get: { preview ? 0.33 : audioManager.playbackProgress },
+                                      set: { audioManager.seek(to: $0); onReplay?() }), in: 0...1) {
+                    Text("Playback position")
                 }
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let progress = min(max(value.location.x / geometry.size.width, 0), 1)
-                            audioManager.seek(to: progress)
-                        }
-                )
+                .labelsHidden().controlSize(.mini).disabled(preview)
             }
-            .frame(height: 6)
+            .frame(maxWidth: .infinity)
+            Divider().frame(height: 20)
+            PanelIconButton(symbol: "xmark", label: "Close panel and stop playback") { onClose?() }
+                .disabled(preview)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+        .padding(.horizontal, 14)
+        .frame(width: PanelMetrics.playbackWidth, height: PanelMetrics.height)
+        .modifier(PanelChrome(audioManager: audioManager))
     }
 }

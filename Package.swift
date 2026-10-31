@@ -9,7 +9,7 @@ let package = Package(
             "Assets.xcassets", "Info.plist", "Parrot.entitlements", "ParrotApp.swift",
             "AppDelegate.swift", "PermissionManager.swift", "SettingsView.swift",
             "ShortcutRecorder.swift", "KeyCodeFormatter.swift", "RecordingIndicatorWindow.swift",
-            "PlaybackIndicatorWindow.swift", "UpdateController.swift"
+            "PlaybackIndicatorWindow.swift", "UpdateController.swift", "FloatingPanelWindow.swift"
         ], swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ParrotCoreTests", dependencies: ["ParrotCore"], swiftSettings: [.swiftLanguageMode(.v5)])
     ]

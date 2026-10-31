@@ -15,6 +15,7 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
     private let permissions: PermissionManager
     private let updates: UpdateController
     private let save: (URL) -> Void
+    private let resetPanels: () -> Void
     private let navigation = NSTableView()
     private let scroll = NSScrollView()
     private var selected: Page = .general
@@ -25,8 +26,8 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.05) : NSColor(white: 0, alpha: 0.04)
     }
 
-    init(audio: AudioManager, permissions: PermissionManager, updates: UpdateController, save: @escaping (URL) -> Void) {
-        self.audio = audio; self.permissions = permissions; self.updates = updates; self.save = save
+    init(audio: AudioManager, permissions: PermissionManager, updates: UpdateController, save: @escaping (URL) -> Void, resetPanels: @escaping () -> Void) {
+        self.audio = audio; self.permissions = permissions; self.updates = updates; self.save = save; self.resetPanels = resetPanels
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 640), styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "General"; window.isReleasedWhenClosed = false
         window.toolbar = NSToolbar(identifier: "ParrotSettings")
@@ -162,11 +163,25 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
     }
     private func appearance() -> NSStackView {
         let stack = page()
-        let preview = NSHostingView(rootView: RecordingIndicatorView(audioManager: audio, preview: true))
-        preview.widthAnchor.constraint(equalToConstant: width + 28).isActive = true; preview.heightAnchor.constraint(equalToConstant: 100).isActive = true
-        stack.addArrangedSubview(preview)
-        stack.addArrangedSubview(group("Recording panel", [toggle("Show pause and stop buttons", \.showRecordingControls, refresh: true)], footer: [detail("Pause keeps the current take open. Stop finishes the take and plays it back. Drag the panel to move it.")]))
-        stack.addArrangedSubview(group("Playback panel", [toggle("Show playback controls", \.showPlaybackIndicator), slider("Dismiss after playback", \.overlayDismissDelay, range: 1...20) { "\(Int($0)) s" }]))
+        let previews = NSHostingView(rootView: VStack(spacing: 6) {
+            RecordingIndicatorView(audioManager: audio, preview: true)
+            PlaybackIndicatorView(audioManager: audio, preview: true)
+        })
+        previews.widthAnchor.constraint(equalToConstant: width + 28).isActive = true
+        previews.heightAnchor.constraint(equalToConstant: 150).isActive = true
+        stack.addArrangedSubview(previews)
+        let shape = SettingsPopup(frame: .zero, pullsDown: false)
+        shape.addItems(withTitles: PanelShape.allCases.map(\.title))
+        shape.selectItem(at: PanelShape.allCases.firstIndex(of: audio.panelShape) ?? 0)
+        shape.setAccessibilityLabel("Panel shape")
+        shape.changed = { [weak self] index in
+            guard PanelShape.allCases.indices.contains(index) else { return }
+            self?.audio.panelShape = PanelShape.allCases[index]
+        }
+        stack.addArrangedSubview(group("Panel style", [row(label("Shape"), shape), row(label("Position"), button("Reset Panel Positions") { [weak self] in self?.resetPanels() })],
+            footer: [detail("Both panels use the same shape. Drag either panel by its grip to move it; positions are remembered separately.")]))
+        stack.addArrangedSubview(group("Recording panel", [toggle("Show pause and stop buttons", \.showRecordingControls, refresh: true)], footer: [detail("Pause keeps the take open. Stop finishes it and plays it back.")]))
+        stack.addArrangedSubview(group("Playback panel", [toggle("Show playback controls", \.showPlaybackIndicator), slider("Dismiss after playback", \.overlayDismissDelay, range: 1...20) { "\(Int($0)) s" }], footer: [detail("Use the × button to close the panel and stop playback immediately.")]))
         stack.addArrangedSubview(group("Visibility", [toggle("Show in Dock", \.showDockIcon), toggle("Show in menu bar", \.showMenuBarIcon)], footer: [detail("At least one icon stays visible so you can always reopen Parrot.")]))
         return stack
     }

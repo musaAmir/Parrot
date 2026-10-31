@@ -134,9 +134,22 @@ final class ShortcutSnapshot: @unchecked Sendable {
     func setupIndicatorWindows() {
         recordingIndicatorWindow = RecordingIndicatorWindow(audioManager: audioManager, appDelegate: self)
         playbackIndicatorWindow = PlaybackIndicatorWindow(audioManager: audioManager)
+        playbackIndicatorWindow?.onClose = { [weak self] in self?.dismissPlaybackOverlay() }
         playbackIndicatorWindow?.onReplay = { [weak self] in
             self?.resetOverlayDismissTimer()
         }
+    }
+
+    func dismissPlaybackOverlay() {
+        resetOverlayDismissTimer()
+        playbackOverlayShown = false
+        playbackIndicatorWindow?.hide()
+        audioManager.stopPlayback()
+    }
+
+    func resetPanelPositions() {
+        recordingIndicatorWindow?.resetPosition()
+        playbackIndicatorWindow?.resetPosition()
     }
 
     func resetOverlayDismissTimer() {
@@ -165,12 +178,29 @@ final class ShortcutSnapshot: @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isRecording in
                 if isRecording {
+                    self?.resetOverlayDismissTimer()
+                    self?.playbackOverlayShown = false
+                    self?.playbackIndicatorWindow?.hide()
                     self?.recordingIndicatorWindow?.show()
                 } else {
                     self?.recordingIndicatorWindow?.hide()
                 }
             }
             .store(in: &cancellables)
+
+        audioManager.$showPlaybackIndicator.removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                if !enabled {
+                    self.resetOverlayDismissTimer()
+                    self.playbackOverlayShown = false
+                    self.playbackIndicatorWindow?.hide()
+                } else if self.audioManager.isPlaying {
+                    self.playbackOverlayShown = true
+                    self.playbackIndicatorWindow?.show()
+                }
+            }.store(in: &cancellables)
 
         // Observe playback state changes
         audioManager.$isPlaying
@@ -602,7 +632,8 @@ final class ShortcutSnapshot: @unchecked Sendable {
 
         if settingsWindow == nil {
             let controller = ParrotSettingsController(audio: audioManager, permissions: permissionManager, updates: updates,
-                save: { [weak self] url in self?.saveRecording(url) })
+                save: { [weak self] url in self?.saveRecording(url) },
+                resetPanels: { [weak self] in self?.resetPanelPositions() })
             settingsController = controller
             settingsWindow = controller.window
             settingsWindow?.delegate = self

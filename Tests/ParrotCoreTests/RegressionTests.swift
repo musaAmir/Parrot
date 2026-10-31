@@ -21,6 +21,19 @@ import AVFoundation
         manager.cancelRecording()
     }
 
+    func testStoppingOldPlaybackDoesNotInterruptNewRecordingCue() async throws {
+        let (manager, recorder, feedback) = try cueFixture()
+        defer { manager.cancelRecording() }
+        let started = expectation(description: "New recording survives old player dismissal")
+        recorder.onRecord = { started.fulfill() }
+        manager.startRecording()
+        manager.stopPlayback()
+        XCTAssertNotNil(feedback.completion)
+        feedback.finish()
+        await fulfillment(of: [started], timeout: 1)
+        XCTAssertTrue(recorder.isRecording)
+    }
+
     func testCaptureWaitsForCueCompletionAndEchoGap() async throws {
         let (manager, recorder, feedback) = try cueFixture()
         defer { manager.cancelRecording() }

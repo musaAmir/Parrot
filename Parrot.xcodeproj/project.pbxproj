@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CC0000000000000000000102 /* FloatingPanelWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* FloatingPanelWindow.swift */; };
+		CC0000000000000000000101 /* PanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* PanelPlacement.swift */; };
 		AA29FCAE433B756FC60B4B5E /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB90684301FA7058E262A8D /* Log.swift */; };
 		AA33DDA7E68C4EA2E5819512 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4A664F608868C5481CCC94 /* AudioDevices.swift */; };
 		AAA630D3F1DB0A632871FB31 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA51CEF66AF9E10731BA5214 /* RecordingStore.swift */; };
@@ -28,6 +30,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CC0000000000000000000002 /* FloatingPanelWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanelWindow.swift; sourceTree = "<group>"; };
+		CC0000000000000000000001 /* PanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPlacement.swift; sourceTree = "<group>"; };
 		AA0000FF2EC5AF2800000000 /* Parrot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Parrot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AAB90684301FA7058E262A8D /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		AA4A664F608868C5481CCC94 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
@@ -81,6 +85,8 @@
 		AA0001082EC5AF2800000008 /* Parrot */ = {
 			isa = PBXGroup;
 			children = (
+				CC0000000000000000000002 /* FloatingPanelWindow.swift */,
+				CC0000000000000000000001 /* PanelPlacement.swift */,
 				BB0000000000000000000001 /* PlaybackScheduler.swift */,
 				BB0000000000000000000002 /* ShortcutPressTracker.swift */,
 				BB0000000000000000000003 /* UpdateController.swift */,
@@ -175,6 +181,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC0000000000000000000102 /* FloatingPanelWindow.swift in Sources */,
+				CC0000000000000000000101 /* PanelPlacement.swift in Sources */,
 				BB0000000000000000000101 /* PlaybackScheduler.swift in Sources */,
 				BB0000000000000000000102 /* ShortcutPressTracker.swift in Sources */,
 				BB0000000000000000000103 /* UpdateController.swift in Sources */,
@@ -336,7 +344,7 @@
 				CODE_SIGN_ENTITLEMENTS = Parrot/Parrot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -348,7 +356,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parrot.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -364,7 +372,7 @@
 				CODE_SIGN_ENTITLEMENTS = Parrot/Parrot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -376,7 +384,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parrot.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

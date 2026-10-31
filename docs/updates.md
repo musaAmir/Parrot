@@ -28,7 +28,7 @@ The private Ed25519 key stays in the Mac’s login Keychain under account `com.p
 ```sh
 CODESIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' \
 NOTARY_PROFILE='parrot-notary' \
-./scripts/prepare-release.sh 1.3.0 7 ReleaseNotes/1.3.0.md
+./scripts/prepare-release.sh 1.3.1 8 ReleaseNotes/1.3.1.md
 ```
 
 The script builds a universal app, signs inside-out, submits for notarization, staples the accepted ticket, verifies Gatekeeper acceptance, then signs the final ZIP and appcast. The previous feed is verified and retained for older supported releases. Assets go in `build/releases/vVERSION/` with checksums and a source-commit manifest.
@@ -36,19 +36,19 @@ The script builds a universal app, signs inside-out, submits for notarization, s
 For a certificate-signed development release that preserves the local build identity, explicitly select `--development`. This uses `CODESIGN_IDENTITY` or `.signing-identity`, verifies that it is an Apple Development certificate, and signs the archive/feed using the existing Sparkle key. It is not notarized and Gatekeeper may block first launch:
 
 ```sh
-./scripts/prepare-release.sh --development 1.3.0 7 ReleaseNotes/1.3.0.md
+./scripts/prepare-release.sh --development 1.3.1 8 ReleaseNotes/1.3.1.md
 ```
 
 A disposable ad-hoc release can still be prepared with `--adhoc`. This changes the app identity and can invalidate existing permission approvals:
 
 ```sh
-./scripts/prepare-release.sh --adhoc 1.3.0 7 ReleaseNotes/1.3.0.md
+./scripts/prepare-release.sh --adhoc 1.3.1 8 ReleaseNotes/1.3.1.md
 ```
 
-5. Review the exact packaged app and run `./scripts/publish-release.sh v1.3.0` to upload a draft. Inspect and publish it as the latest release in GitHub. Never replace an already published ZIP, reuse a build number, or edit signed artifacts. Make another release instead.
+5. Review the exact packaged app and run `./scripts/publish-release.sh v1.3.1` to upload a draft. Inspect and publish it as the latest release in GitHub. Never replace an already published ZIP, reuse a build number, or edit signed artifacts. Make another release instead.
 
 The release key remains local; routine app releases are prepared on the signing Mac. GitHub Actions independently tests code, universal builds, metadata, and signing/tamper rejection using a disposable key. It does not hold the production key or automatically publish application binaries.
 
 ## Current release limits
 
-1.3.0 is Apple Development signed, not Apple-notarized. Migrating from 1.2.0’s ad-hoc identity can require one permission grant; the local signed build retained microphone and Device Control and Data Access approval across a rebuild and replacement. Unit tests and a Sparkle startup probe do not replace physical microphone, device-routing, Accessibility, or Intel hardware checks. A real installation-and-update round trip requires a later higher build and user approval to run its installer. Clearly distinguish these checks from signature verification.
+1.3.1 is Apple Development signed, not Apple-notarized. Migrating from 1.2.0’s ad-hoc identity can require one permission grant; the local signed build retained microphone and Device Control and Data Access approval across a rebuild and replacement. Unit tests and a Sparkle startup probe do not replace physical microphone, device-routing, Accessibility, or Intel hardware checks. A real installation-and-update round trip requires a later higher build and user approval to run its installer. Clearly distinguish these checks from signature verification.
