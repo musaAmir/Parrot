@@ -152,7 +152,7 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
         }
         stack.addArrangedSubview(group("Startup", [row(label("Launch Parrot at login"), login)]))
         stack.addArrangedSubview(group("Recording", [toggle("Keep recent recordings", \.keepRecordings), slider("Maximum length", \.maxRecordingDuration, range: 10...600) { String(format: "%d:%02d", Int($0) / 60, Int($0) % 60) }], footer: [detail("Your latest 10 takes stay on this Mac. Save a copy from Recordings to keep a take permanently.")]))
-        stack.addArrangedSubview(group("Feedback", [toggle("Play recording sounds", \.playFeedbackSounds)], footer: [detail("Recording starts after the start cue and a short echo gap. Wait for the timer before speaking. Turn sounds off for an immediate start.")]))
+        stack.addArrangedSubview(group("Feedback", [toggle("Play stop sound", \.playFeedbackSounds), toggle("Play start sound (delays recording)", \.playStartSound)], footer: [detail("Leave the start sound off to record immediately. If enabled, capture waits for the sound and its echo to finish; speak once the timer starts. The stop sound plays after the microphone closes.")]))
         let automatic = SettingsSwitch(); automatic.state = updates.automaticallyChecksForUpdates ? .on : .off
         automatic.setAccessibilityLabel("Check for updates automatically")
         automatic.changed = { [weak self] in self?.updates.setAutomaticallyChecksForUpdates($0) }
@@ -220,7 +220,7 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
     private func audioPage() -> NSStackView {
         let stack = page()
         stack.addArrangedSubview(group("Devices", [device("Microphone", devices: audio.getAvailableInputDevices(), key: \.selectedInputDeviceUID), device("Playback output", devices: audio.getAvailableOutputDevices(), key: \.selectedOutputDeviceID), row(label("Connected devices"), button("Refresh") { [weak self] in self?.render() })]))
-        stack.addArrangedSubview(group("Playback", [slider("Playback delay", \.playbackDelay, range: 0...5) { String(format: "%.1f s", $0) }, slider("Volume", \.playbackVolume, range: 0...1) { "\(Int($0 * 100))%" }]))
+        stack.addArrangedSubview(group("Playback", [slider("Playback delay", \.playbackDelay, range: 0...5) { String(format: "%.1f s", $0) }, slider("Volume", \.playbackVolume, range: 0...1) { "\(Int($0 * 100))%" }], footer: [detail("Playback delay is the wait before listening to a finished take. It does not delay the start of recording.")]))
         return stack
     }
     private func recordings() -> NSStackView {

@@ -4,6 +4,51 @@ import AVFoundation
 @testable import ParrotCore
 
 @MainActor final class RegressionTests: XCTestCase {
+    func testZeroPlaybackDelayStartsCaptureImmediatelyWithFeedbackEnabled() throws {
+        for delay in [0.0, 5.0] {
+            let (manager, recorder, feedback) = try cueFixture(startSound: false)
+            defer { manager.cancelRecording() }
+            manager.playbackDelay = delay
+            manager.startRecording()
+            XCTAssertTrue(recorder.isRecording, "Speech from the shortcut press must be captured without waiting for a cue")
+            XCTAssertFalse(manager.isPreparingToRecord)
+            XCTAssertTrue(feedback.cues.isEmpty, "An immediate start must not play a cue into the microphone")
+            var soundWasCaptured = false
+            feedback.onPlay = { soundWasCaptured = recorder.isRecording }
+            manager.stopRecordingAndPlayback()
+            XCTAssertEqual(feedback.cues, [.stop], "Upgrades retain the stop cue without delaying capture")
+            XCTAssertFalse(soundWasCaptured)
+        }
+    }
+
+    func testDisablingFeedbackRemovesStartWait() throws {
+        let (manager, recorder, feedback) = try cueFixture(startSound: false)
+        defer { manager.cancelRecording() }
+        manager.playFeedbackSounds = false
+        manager.startRecording()
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertFalse(manager.isPreparingToRecord)
+        XCTAssertTrue(feedback.cues.isEmpty)
+    }
+
+    func testStartSoundIsExplicitOptInAndPersistsIndependentlyOfStopSound() {
+        let name = "ParrotTests-\(UUID())", defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(true, forKey: "playFeedbackSounds") // Existing installation.
+        let manager = AudioManager(defaults: defaults)
+        XCTAssertFalse(manager.playStartSound)
+        XCTAssertTrue(manager.playFeedbackSounds)
+        manager.playStartSound = true
+        manager.playFeedbackSounds = false
+        manager.saveSettings()
+        let reloaded = AudioManager(defaults: defaults)
+        XCTAssertTrue(reloaded.playStartSound)
+        XCTAssertFalse(reloaded.playFeedbackSounds)
+        reloaded.playStartSound = false
+        reloaded.saveSettings()
+        XCTAssertFalse(AudioManager(defaults: defaults).playStartSound)
+    }
+
     func testStartCueCannotBeCapturedByMicrophone() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -11,6 +56,7 @@ import AVFoundation
         let name = "ParrotTests-\(UUID())", defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
         defaults.set(true, forKey: "playFeedbackSounds")
+        defaults.set(true, forKey: "playStartSound")
         let recorder = TestRecordingSession(), feedback = TestRecordingFeedback()
         var soundWasCaptured = false
         feedback.onPlay = { soundWasCaptured = recorder.isRecording }
@@ -108,11 +154,12 @@ import AVFoundation
         XCTAssertEqual(manager.playedURLs, [url!])
     }
 
-    private func cueFixture() throws -> (PlaybackObservationManager, TestRecordingSession, TestRecordingFeedback) {
+    private func cueFixture(startSound: Bool = true) throws -> (PlaybackObservationManager, TestRecordingSession, TestRecordingFeedback) {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let name = "ParrotTests-\(UUID())", defaults = UserDefaults(suiteName: name)!
         defaults.set(true, forKey: "playFeedbackSounds")
+        if startSound { defaults.set(true, forKey: "playStartSound") }
         addTeardownBlock {
             defaults.removePersistentDomain(forName: name)
             try? FileManager.default.removeItem(at: folder)

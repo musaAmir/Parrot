@@ -99,6 +99,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     @Published var showDockIcon: Bool = true
     @Published var showMenuBarIcon: Bool = true
     @Published var showPlaybackIndicator: Bool = true
+    /// Opt-in: a speaker cue must finish before capture to avoid recording its echo.
+    @Published var playStartSound: Bool = false
+    /// Keep the existing preference key for stop sounds; upgrades start immediately.
     @Published var playFeedbackSounds: Bool = false
     @Published var overlayDismissDelay: Double = 5.0  // 1-20 seconds
 
@@ -168,6 +171,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             $panelShape.map { _ in }.eraseToAnyPublisher(),
             $showRecordingControls.map { _ in }.eraseToAnyPublisher(),
             $showPlaybackIndicator.map { _ in }.eraseToAnyPublisher(),
+            $playStartSound.map { _ in }.eraseToAnyPublisher(),
             $playFeedbackSounds.map { _ in }.eraseToAnyPublisher(),
             $overlayDismissDelay.map { _ in }.eraseToAnyPublisher(),
             $maxRecordingDuration.map { _ in }.eraseToAnyPublisher(),
@@ -229,6 +233,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         if let savedPlayFeedback = defaults.value(forKey: "playFeedbackSounds") as? Bool {
             playFeedbackSounds = savedPlayFeedback
         }
+        playStartSound = defaults.bool(forKey: "playStartSound")
         if let savedOverlayDelay = defaults.value(forKey: "overlayDismissDelay") as? Double {
             overlayDismissDelay = savedOverlayDelay
         }
@@ -288,6 +293,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         defaults.set(panelShape.rawValue, forKey: "panelShape")
         defaults.set(showRecordingControls, forKey: "showRecordingControls")
         defaults.set(showPlaybackIndicator, forKey: "showPlaybackIndicator")
+        defaults.set(playStartSound, forKey: "playStartSound")
         defaults.set(playFeedbackSounds, forKey: "playFeedbackSounds")
         defaults.set(overlayDismissDelay, forKey: "overlayDismissDelay")
         defaults.set(maxRecordingDuration, forKey: "maxRecordingDuration")
@@ -311,7 +317,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         recordingStartGeneration = UUID()
         let generation = recordingStartGeneration
 
-        if playFeedbackSounds {
+        if playStartSound {
             feedbackSounds.play(.start) { [weak self] in
                 guard let self, self.isPreparingToRecord, self.recordingStartGeneration == generation else { return }
                 // The speaker cue is finished; let its acoustic tail fade before opening the mic.
