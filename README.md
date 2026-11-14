@@ -10,11 +10,11 @@ Free and open source. macOS 14+. Apple silicon and Intel.
 
 Unzip the download, move **Parrot.app** to **Applications**, and open it. Grant microphone and Device Control and Data Access permissions (Accessibility on older macOS versions) to use global recording shortcuts.
 
-Hold **⌘⇧Z** to record; release to play back. Recording starts immediately by default. General settings has independent stop and start sounds. The optional start sound delays capture until the cue plus a 150 ms echo gap finishes; wait for the timer before speaking when it is enabled. Releasing during that lead-in cancels the take. The stop sound plays after the microphone closes. Playback delay controls the wait before listening to a finished take, not the start of recording. Change shortcuts and recording retention in Settings.
+Hold **⌘⇧Z** to record; release to play back. Recording starts without waiting for a sound. General settings has independent start and stop sounds. The start sound is a soft 55 ms tick that plays after capture begins; it never delays, trims or filters your recording. With speakers, the microphone may pick up the tick. The stop sound plays after the microphone closes. Playback delay controls the wait before listening to a finished take, not the start of recording. Change shortcuts and recording retention in Settings.
 
 Open **Recordings…** from the menu bar to browse your latest takes, play or pause, seek, and save a permanent copy. Parrot keeps up to 10 recent takes locally when retention is enabled. The native settings window shares Hush’s unified toolbar, sidebar badges, grouped cards and compact AppKit controls. General contains startup and retention settings; Appearance contains a recording-panel preview, optional pause/stop buttons and visibility settings. Recordings also lets you start, pause, resume and stop a take without a shortcut. Drag either floating panel by its grip to move it; each position is remembered separately. Appearance offers Squared or Rounded panel shapes and Reset Panel Positions. The playback panel includes a close button that stops playback and dismisses it immediately.
 
-Version 1.3.2 is signed with an Apple Development certificate and is not notarized by Apple; macOS may block first launch. Moving from an older ad-hoc build can require one permission approval. Versions before 1.2.0 need one manual download to gain automatic update checks.
+Version 1.3.3 is signed with an Apple Development certificate and is not notarized by Apple; macOS may block first launch. Moving from an older ad-hoc build can require one permission approval. Versions before 1.2.0 need one manual download to gain automatic update checks.
 
 ## Build
 

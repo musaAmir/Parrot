@@ -31,19 +31,43 @@ protocol RecordingFeedback: AnyObject {
 }
 
 final class SystemRecordingFeedback: NSObject, RecordingFeedback, NSSoundDelegate {
+    // Decode once, before a recording is requested. The start cue is a soft 55 ms tick.
+    private let startSound = NSSound(data: SystemRecordingFeedback.startCueData())
     private var activeSound: NSSound?
     private var completion: (() -> Void)?
 
     func play(_ cue: RecordingCue, completion: @escaping () -> Void) {
         cancel()
-        let name = cue == .start ? "Purr" : "Bottle"
-        guard let sound = NSSound(named: NSSound.Name(name))?.copy() as? NSSound else {
+        let template = cue == .start ? startSound : NSSound(named: NSSound.Name("Bottle"))
+        guard let sound = template?.copy() as? NSSound else {
             completion(); return
         }
         self.completion = completion
         activeSound = sound
         sound.delegate = self
         if !sound.play() { finish(sound) }
+    }
+
+    static func startCueData() -> Data {
+        let sampleRate = 44100
+        let frames = Int(Double(sampleRate) * 0.055)
+        var data = Data()
+        func append<T: FixedWidthInteger>(_ value: T) {
+            var littleEndian = value.littleEndian
+            withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+        }
+        data.append(contentsOf: "RIFF".utf8); append(UInt32(36 + frames * 2))
+        data.append(contentsOf: "WAVEfmt ".utf8); append(UInt32(16))
+        append(UInt16(1)); append(UInt16(1)); append(UInt32(sampleRate))
+        append(UInt32(sampleRate * 2)); append(UInt16(2)); append(UInt16(16))
+        data.append(contentsOf: "data".utf8); append(UInt32(frames * 2))
+        for frame in 0..<frames {
+            let t = Double(frame) / Double(sampleRate)
+            let envelope = pow(sin(.pi * Double(frame) / Double(frames - 1)), 2)
+            let tone = sin(2 * .pi * 1000 * t)
+            append(Int16((0.12 * envelope * tone * Double(Int16.max)).rounded()))
+        }
+        return data
     }
 
     func cancel() {
@@ -99,7 +123,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     @Published var showDockIcon: Bool = true
     @Published var showMenuBarIcon: Bool = true
     @Published var showPlaybackIndicator: Bool = true
-    /// Opt-in: a speaker cue must finish before capture to avoid recording its echo.
+    /// A brief cue plays after capture begins, without delaying or filtering audio.
     @Published var playStartSound: Bool = false
     /// Keep the existing preference key for stop sounds; upgrades start immediately.
     @Published var playFeedbackSounds: Bool = false
@@ -116,7 +140,6 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     @Published var recordingDuration: TimeInterval = 0
 
     private let feedbackSounds: RecordingFeedback
-    private let feedbackSettlingDelay: TimeInterval
     private var audioRecorder: RecordingSession?
     private let makeRecorder: (URL, [String: Any]) throws -> RecordingSession
     private var audioPlayer: AVAudioPlayer?
@@ -130,14 +153,11 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
     private var previousDefaultInputUID: String?
     private var appliedInputUID: String?
     private let playbackScheduler = PlaybackScheduler()
-    private let recordingStartScheduler = PlaybackScheduler()
-    private var recordingStartGeneration = UUID()
     private let recordingDirectory: URL?
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard, recordingDirectory: URL? = nil, feedbackSounds: RecordingFeedback = SystemRecordingFeedback(), feedbackSettlingDelay: TimeInterval = 0.15, makeRecorder: @escaping (URL, [String: Any]) throws -> RecordingSession = { try AVAudioRecorder(url: $0, settings: $1) }) {
+    init(defaults: UserDefaults = .standard, recordingDirectory: URL? = nil, feedbackSounds: RecordingFeedback = SystemRecordingFeedback(), makeRecorder: @escaping (URL, [String: Any]) throws -> RecordingSession = { try AVAudioRecorder(url: $0, settings: $1) }) {
         self.feedbackSounds = feedbackSounds
-        self.feedbackSettlingDelay = feedbackSettlingDelay
         self.defaults = defaults
         self.recordingDirectory = recordingDirectory
         self.makeRecorder = makeRecorder
@@ -314,21 +334,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
         isRecordingPaused = false
         isPreparingToRecord = true
         isRecording = true
-        recordingStartGeneration = UUID()
-        let generation = recordingStartGeneration
-
-        if playStartSound {
-            feedbackSounds.play(.start) { [weak self] in
-                guard let self, self.isPreparingToRecord, self.recordingStartGeneration == generation else { return }
-                // The speaker cue is finished; let its acoustic tail fade before opening the mic.
-                self.recordingStartScheduler.schedule(after: self.feedbackSettlingDelay) { [weak self] in
-                    guard let self, self.recordingStartGeneration == generation else { return }
-                    self.beginRecordingCapture()
-                }
-            }
-        } else {
-            beginRecordingCapture()
-        }
+        beginRecordingCapture()
     }
 
     private func beginRecordingCapture() {
@@ -363,6 +369,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
             isPreparingToRecord = false
             startRecordingTimer()
             Log.audio.info("Recording started")
+            if playStartSound { feedbackSounds.play(.start, completion: {}) }
         } catch {
             lastError = "Recording failed: \(error.localizedDescription)"
             try? FileManager.default.removeItem(at: url)
@@ -482,8 +489,6 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate, AVAudioRe
 
     /// Sleep and termination must never start a delayed playback or leave the mic open.
     func cancelRecording() {
-        recordingStartGeneration = UUID()
-        recordingStartScheduler.cancel()
         feedbackSounds.cancel()
         isPreparingToRecord = false
         playbackScheduler.cancel()

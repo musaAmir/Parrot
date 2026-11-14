@@ -1,9 +1,23 @@
 import XCTest
 import CoreGraphics
 import AVFoundation
+import AppKit
 @testable import ParrotCore
 
 @MainActor final class RegressionTests: XCTestCase {
+    func testStartCuePlaysAfterCaptureBeginsWithoutWaitingForSoundCompletion() throws {
+        let (manager, recorder, feedback) = try cueFixture()
+        defer { manager.cancelRecording() }
+        var wasRecordingDuringCue = false
+        feedback.onPlay = { wasRecordingDuringCue = recorder.isRecording }
+        manager.startRecording()
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertFalse(manager.isPreparingToRecord)
+        XCTAssertTrue(wasRecordingDuringCue)
+        XCTAssertEqual(feedback.cues, [.start])
+        XCTAssertNotNil(feedback.completion, "Capture must start even while the sound is unfinished")
+    }
+
     func testZeroPlaybackDelayStartsCaptureImmediatelyWithFeedbackEnabled() throws {
         for delay in [0.0, 5.0] {
             let (manager, recorder, feedback) = try cueFixture(startSound: false)
@@ -49,94 +63,57 @@ import AVFoundation
         XCTAssertFalse(AudioManager(defaults: defaults).playStartSound)
     }
 
-    func testStartCueCannotBeCapturedByMicrophone() throws {
+    func testFailedCaptureDoesNotAnnounceRecordingStarted() throws {
+        let (manager, recorder, feedback) = try cueFixture()
+        recorder.succeeds = false
+        manager.startRecording()
+        XCTAssertFalse(manager.isRecording)
+        XCTAssertFalse(manager.isPreparingToRecord)
+        XCTAssertTrue(feedback.cues.isEmpty)
+        XCTAssertNotNil(manager.lastError)
+    }
+
+    func testLateStartSoundCallbackCannotRestartStoppedOrNewTake() throws {
+        let (manager, recorder, feedback) = try cueFixture()
+        defer { manager.cancelRecording() }
+        manager.startRecording()
+        let oldCompletion = feedback.completion
+        manager.cancelRecording()
+        oldCompletion?()
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(recorder.limits.count, 1)
+        manager.startRecording()
+        oldCompletion?()
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertEqual(recorder.limits.count, 2)
+    }
+
+    func testStartTickIsBriefQuietAndDecodable() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let name = "ParrotTests-\(UUID())", defaults = UserDefaults(suiteName: name)!
-        defer { defaults.removePersistentDomain(forName: name) }
-        defaults.set(true, forKey: "playFeedbackSounds")
-        defaults.set(true, forKey: "playStartSound")
-        let recorder = TestRecordingSession(), feedback = TestRecordingFeedback()
-        var soundWasCaptured = false
-        feedback.onPlay = { soundWasCaptured = recorder.isRecording }
-        let manager = AudioManager(defaults: defaults, recordingDirectory: folder, feedbackSounds: feedback) { _, _ in recorder }
-        manager.startRecording()
-        XCTAssertFalse(soundWasCaptured, "The microphone is already recording when the speaker cue plays")
-        XCTAssertFalse(recorder.isRecording, "Capture must wait until the cue and echo gap finish")
-        manager.cancelRecording()
-    }
-
-    func testStoppingOldPlaybackDoesNotInterruptNewRecordingCue() async throws {
-        let (manager, recorder, feedback) = try cueFixture()
-        defer { manager.cancelRecording() }
-        let started = expectation(description: "New recording survives old player dismissal")
-        recorder.onRecord = { started.fulfill() }
-        manager.startRecording()
-        manager.stopPlayback()
-        XCTAssertNotNil(feedback.completion)
-        feedback.finish()
-        await fulfillment(of: [started], timeout: 1)
-        XCTAssertTrue(recorder.isRecording)
-    }
-
-    func testCaptureWaitsForCueCompletionAndEchoGap() async throws {
-        let (manager, recorder, feedback) = try cueFixture()
-        defer { manager.cancelRecording() }
-        let started = expectation(description: "Microphone starts after cue")
-        recorder.onRecord = { started.fulfill() }
-        manager.startRecording()
-        XCTAssertTrue(manager.isPreparingToRecord)
-        XCTAssertFalse(recorder.isRecording)
-        feedback.finish()
-        XCTAssertFalse(recorder.isRecording, "Keep a settling gap after sound completion")
-        await fulfillment(of: [started], timeout: 1)
-        XCTAssertFalse(manager.isPreparingToRecord)
-        XCTAssertTrue(recorder.isRecording)
-    }
-
-    func testReleaseDuringCueTailCancelsPendingCapture() async throws {
-        let (manager, recorder, feedback) = try cueFixture()
-        defer { manager.cancelRecording() }
-        let unwanted = expectation(description: "Cancelled take must not start")
-        unwanted.isInverted = true
-        recorder.onRecord = { unwanted.fulfill() }
-        manager.startRecording(); feedback.finish()
-        manager.stopRecordingAndPlayback()
-        XCTAssertFalse(manager.isRecording)
-        XCTAssertFalse(manager.isPreparingToRecord)
-        await fulfillment(of: [unwanted], timeout: 0.08)
-        XCTAssertTrue(recorder.limits.isEmpty)
-    }
-
-    func testOldCueCallbackCannotStartANewTakeEarly() async throws {
-        let (manager, recorder, feedback) = try cueFixture()
-        defer { manager.cancelRecording() }
-        manager.startRecording()
-        let staleCompletion = feedback.completion
-        manager.stopRecordingAndPlayback()
-        manager.startRecording()
-        staleCompletion?()
-        let early = expectation(description: "Old cue must not start the next take")
-        early.isInverted = true
-        recorder.onRecord = { early.fulfill() }
-        await fulfillment(of: [early], timeout: 0.08)
-        XCTAssertTrue(manager.isPreparingToRecord)
-        let started = expectation(description: "New cue allows capture")
-        recorder.onRecord = { started.fulfill() }
-        feedback.finish()
-        await fulfillment(of: [started], timeout: 1)
-        XCTAssertEqual(recorder.limits.count, 1)
+        let url = folder.appendingPathComponent("start.wav")
+        try SystemRecordingFeedback.startCueData().write(to: url)
+        let file = try AVAudioFile(forReading: url)
+        XCTAssertEqual(Double(file.length) / file.processingFormat.sampleRate, 0.055, accuracy: 0.001)
+        let samples = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))!
+        try file.read(into: samples)
+        let channel = try XCTUnwrap(samples.floatChannelData?[0])
+        let values = UnsafeBufferPointer(start: channel, count: Int(samples.frameLength))
+        let peak = values.map { abs($0) }.max()!
+        XCTAssertGreaterThan(peak, 0.05)
+        XCTAssertLessThanOrEqual(peak, 0.121)
+        XCTAssertEqual(values.first!, 0, accuracy: 0.001)
+        XCTAssertEqual(values.last!, 0, accuracy: 0.001)
+        XCTAssertNotNil(NSSound(data: SystemRecordingFeedback.startCueData()))
     }
 
     func testStopCueWaitsForClosedMicrophoneAndDelaysPlayback() async throws {
         let (manager, recorder, feedback) = try cueFixture()
         defer { manager.cancelRecording() }
         manager.playbackDelay = 0
-        let started = expectation(description: "Capture starts")
-        recorder.onRecord = { started.fulfill() }
-        manager.startRecording(); feedback.finish()
-        await fulfillment(of: [started], timeout: 1)
+        manager.startRecording()
+        XCTAssertTrue(recorder.isRecording)
         let url = manager.currentRecordingURL
         var cueCaptured = false
         feedback.onPlay = { cueCaptured = recorder.isRecording }
@@ -165,7 +142,7 @@ import AVFoundation
             try? FileManager.default.removeItem(at: folder)
         }
         let recorder = TestRecordingSession(), feedback = TestRecordingFeedback()
-        let manager = PlaybackObservationManager(defaults: defaults, recordingDirectory: folder, feedbackSounds: feedback, feedbackSettlingDelay: 0.03) { url, _ in
+        let manager = PlaybackObservationManager(defaults: defaults, recordingDirectory: folder, feedbackSounds: feedback) { url, _ in
             try Data().write(to: url)
             return recorder
         }
