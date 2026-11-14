@@ -152,7 +152,7 @@ final class ParrotSettingsController: NSWindowController, NSTableViewDataSource,
         }
         stack.addArrangedSubview(group("Startup", [row(label("Launch Parrot at login"), login)]))
         stack.addArrangedSubview(group("Recording", [toggle("Keep recent recordings", \.keepRecordings), slider("Maximum length", \.maxRecordingDuration, range: 10...600) { String(format: "%d:%02d", Int($0) / 60, Int($0) % 60) }], footer: [detail("Your latest 10 takes stay on this Mac. Save a copy from Recordings to keep a take permanently.")]))
-        stack.addArrangedSubview(group("Feedback", [toggle("Play start sound", \.playStartSound), toggle("Play stop sound", \.playFeedbackSounds)], footer: [detail("A soft tick plays as recording begins, with no added wait. Speakers may be picked up by the microphone. The stop sound plays after the microphone closes.")]))
+        stack.addArrangedSubview(group("Feedback", [toggle("Play start sound", \.playStartSound), toggle("Play stop sound", \.playFeedbackSounds)], footer: [detail("A soft tap plays as recording begins, with no added wait. Speakers may be picked up by the microphone. The stop sound plays after the microphone closes.")]))
         let automatic = SettingsSwitch(); automatic.state = updates.automaticallyChecksForUpdates ? .on : .off
         automatic.setAccessibilityLabel("Check for updates automatically")
         automatic.changed = { [weak self] in self?.updates.setAutomaticallyChecksForUpdates($0) }

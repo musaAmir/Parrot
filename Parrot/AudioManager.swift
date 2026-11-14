@@ -31,7 +31,7 @@ protocol RecordingFeedback: AnyObject {
 }
 
 final class SystemRecordingFeedback: NSObject, RecordingFeedback, NSSoundDelegate {
-    // Decode once, before a recording is requested. The start cue is a soft 55 ms tick.
+    // Decode once, before a recording is requested. A short, muted wooden tap.
     private let startSound = NSSound(data: SystemRecordingFeedback.startCueData())
     private var activeSound: NSSound?
     private var completion: (() -> Void)?
@@ -61,10 +61,17 @@ final class SystemRecordingFeedback: NSObject, RecordingFeedback, NSSoundDelegat
         append(UInt16(1)); append(UInt16(1)); append(UInt32(sampleRate))
         append(UInt32(sampleRate * 2)); append(UInt16(2)); append(UInt16(16))
         data.append(contentsOf: "data".utf8); append(UInt32(frames * 2))
+        var noiseState: UInt32 = 0x50415252
+        var softenedNoise = 0.0
         for frame in 0..<frames {
             let t = Double(frame) / Double(sampleRate)
-            let envelope = pow(sin(.pi * Double(frame) / Double(frames - 1)), 2)
-            let tone = sin(2 * .pi * 1000 * t)
+            let remaining = Double(frames - 1 - frame) / Double(sampleRate)
+            let envelope = min(1, t / 0.0015) * exp(-t / 0.012) * min(1, remaining / 0.008)
+            noiseState = noiseState &* 1664525 &+ 1013904223
+            let noise = Double(noiseState) / Double(UInt32.max) * 2 - 1
+            softenedNoise += 0.18 * (noise - softenedNoise)
+            let tone = 0.75 * sin(2 * .pi * 480 * t)
+                + 0.18 * sin(2 * .pi * 790 * t) + 0.07 * softenedNoise
             append(Int16((0.12 * envelope * tone * Double(Int16.max)).rounded()))
         }
         return data
